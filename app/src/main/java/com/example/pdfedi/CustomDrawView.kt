@@ -1,46 +1,65 @@
 package com.example.pdfedi
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
+import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 
 class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
-    // THE SWITCH: False = Scrolling, True = Drawing
     var isDrawingEnabled = false
 
-    // 1. Set up the red pen
-    private val drawPaint = Paint().apply {
-        color = Color.RED
-        isAntiAlias = true
-        strokeWidth = 8f
-        style = Paint.Style.STROKE
-        strokeJoin = Paint.Join.ROUND
-        strokeCap = Paint.Cap.ROUND
+    // Current Tool Settings
+    var currentDrawColor = Color.parseColor("#F44336") // Default Red
+    var currentStrokeWidth = 8f // Default Medium
+    var isEraser = false
+    var isHighlighter = false
+
+    // Data class to remember exactly how each line was drawn
+    private data class Stroke(val path: Path, val paint: Paint)
+    private val strokes = mutableListOf<Stroke>()
+
+    private var currentPath = Path()
+    private var currentPaint = createPaint()
+
+    init {
+        // REQUIRED FOR ERASER: Forces the view to use software layers so CLEAR mode works properly
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
-    // 2. Track the drawing paths
-    private var currentPath = Path()
-    private val paths = mutableListOf<Path>()
+    // Generates a fresh Paint brush based on your selected tools
+    private fun createPaint(): Paint {
+        val paint = Paint().apply {
+            color = currentDrawColor
+            strokeWidth = currentStrokeWidth
+            style = Paint.Style.STROKE
+            strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
+            isAntiAlias = true
+        }
 
-    // 3. Draw the lines on the screen
+        if (isEraser) {
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+            paint.strokeWidth = currentStrokeWidth * 3f // Make eraser wider
+        } else if (isHighlighter) {
+            paint.alpha = 100 // 40% transparency so you can read text underneath
+            paint.strokeWidth = currentStrokeWidth * 2.5f // Highlighters are wide
+        }
+        return paint
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        for (path in paths) {
-            canvas.drawPath(path, drawPaint)
+        // Draw history
+        for (stroke in strokes) {
+            canvas.drawPath(stroke.path, stroke.paint)
         }
-        canvas.drawPath(currentPath, drawPaint)
+        // Draw current moving line
+        canvas.drawPath(currentPath, currentPaint)
     }
 
-    // 4. HERE IS THE MISSING FUNCTION! This listens for your finger.
     override fun onTouchEvent(event: MotionEvent): Boolean {
-
-        // If drawing is disabled, ignore the touch so the RecyclerView can scroll!
         if (!isDrawingEnabled) return false
 
         val touchX = event.x
@@ -48,6 +67,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                currentPaint = createPaint() // Grab the latest color/tool settings
                 currentPath.moveTo(touchX, touchY)
             }
             MotionEvent.ACTION_MOVE -> {
@@ -55,13 +75,12 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             }
             MotionEvent.ACTION_UP -> {
                 currentPath.lineTo(touchX, touchY)
-                paths.add(currentPath)
-                currentPath = Path() // Reset for the next line
+                strokes.add(Stroke(currentPath, currentPaint))
+                currentPath = Path() // Reset for next line
             }
             else -> return false
         }
-
-        invalidate() // Tell Android to redraw the screen
+        invalidate()
         return true
     }
 }
