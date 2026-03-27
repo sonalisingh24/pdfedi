@@ -9,74 +9,78 @@ import android.view.View
 class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
     var isDrawingEnabled = false
+    var pageIndex = -1 // The Adapter will tell us which page this is
 
-    // Current Tool Settings
-    var currentDrawColor = Color.parseColor("#F44336") // Default Red
-    var currentStrokeWidth = 8f // Default Medium
+    var currentDrawColor = Color.parseColor("#F44336")
+    var currentStrokeWidth = 8f
     var isEraser = false
     var isHighlighter = false
 
-    // Data class to remember exactly how each line was drawn
-    private data class Stroke(val path: Path, val paint: Paint)
-    private val strokes = mutableListOf<Stroke>()
-
-    private var currentPath = Path()
+    private var currentStroke: Stroke? = null
     private var currentPaint = createPaint()
 
     init {
-        // REQUIRED FOR ERASER: Forces the view to use software layers so CLEAR mode works properly
         setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
-    // Generates a fresh Paint brush based on your selected tools
-    private fun createPaint(): Paint {
+    private fun createPaint(color: Int = currentDrawColor, width: Float = currentStrokeWidth, eraser: Boolean = isEraser, highlighter: Boolean = isHighlighter): Paint {
         val paint = Paint().apply {
-            color = currentDrawColor
-            strokeWidth = currentStrokeWidth
+            this.color = color
+            strokeWidth = width
             style = Paint.Style.STROKE
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
             isAntiAlias = true
         }
-
-        if (isEraser) {
+        if (eraser) {
             paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-            paint.strokeWidth = currentStrokeWidth * 3f // Make eraser wider
-        } else if (isHighlighter) {
-            paint.alpha = 100 // 40% transparency so you can read text underneath
-            paint.strokeWidth = currentStrokeWidth * 2.5f // Highlighters are wide
+            paint.strokeWidth = width * 3f
+        } else if (highlighter) {
+            paint.alpha = 100
+            paint.strokeWidth = width * 2.5f
         }
         return paint
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // Draw history
-        for (stroke in strokes) {
-            canvas.drawPath(stroke.path, stroke.paint)
+
+        // 1. Draw Global History for this specific page
+        val myStrokes = StrokeManager.globalStrokes.filter { it.pageIndex == pageIndex }
+        for (stroke in myStrokes) {
+            val paint = createPaint(stroke.color, stroke.width, stroke.isEraser, stroke.isHighlighter)
+            canvas.drawPath(stroke.path, paint)
         }
-        // Draw current moving line
-        canvas.drawPath(currentPath, currentPaint)
+
+        // 2. Draw the line currently being drawn
+        currentStroke?.let {
+            canvas.drawPath(it.path, currentPaint)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!isDrawingEnabled) return false
+        if (!isDrawingEnabled || pageIndex == -1) return false
 
         val touchX = event.x
         val touchY = event.y
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                currentPaint = createPaint() // Grab the latest color/tool settings
-                currentPath.moveTo(touchX, touchY)
+                currentPaint = createPaint()
+                currentStroke = Stroke(pageIndex, mutableListOf(), currentDrawColor, currentStrokeWidth, isEraser, isHighlighter)
+                currentStroke?.path?.moveTo(touchX, touchY)
+                currentStroke?.points?.add(PointF(touchX, touchY))
             }
             MotionEvent.ACTION_MOVE -> {
-                currentPath.lineTo(touchX, touchY)
+                currentStroke?.path?.lineTo(touchX, touchY)
+                currentStroke?.points?.add(PointF(touchX, touchY))
             }
             MotionEvent.ACTION_UP -> {
-                currentPath.lineTo(touchX, touchY)
-                strokes.add(Stroke(currentPath, currentPaint))
-                currentPath = Path() // Reset for next line
+                currentStroke?.path?.lineTo(touchX, touchY)
+                currentStroke?.points?.add(PointF(touchX, touchY))
+
+                currentStroke?.let { StrokeManager.addStroke(it) }
+                currentStroke = null
             }
             else -> return false
         }

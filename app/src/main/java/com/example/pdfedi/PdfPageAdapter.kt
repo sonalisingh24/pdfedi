@@ -48,6 +48,7 @@ class PdfPageAdapter(
 
         // Apply all the current settings to this specific page's drawing glass
         holder.drawView.isDrawingEnabled = isDrawingMode
+        holder.drawView.pageIndex = position
         holder.drawView.currentDrawColor = currentDrawColor
         holder.drawView.currentStrokeWidth = currentStrokeWidth
         holder.drawView.isEraser = isEraser
