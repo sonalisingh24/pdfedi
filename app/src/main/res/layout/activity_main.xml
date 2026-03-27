@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="#ECECEC">
 
     <LinearLayout
+        android:id="@+id/topToolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
+        android:layout_alignParentTop="true"
         android:background="@color/white"
-        android:elevation="4dp">
+        android:elevation="4dp"
+        android:orientation="horizontal"
+        android:padding="8dp">
 
         <Button
             android:id="@+id/btnOpenPdf"
@@ -20,21 +21,44 @@
             android:text="Open PDF" />
 
         <Button
-            android:id="@+id/btnToggleDraw"
+            android:id="@+id/btnSavePdf"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:text="Draw: OFF"
-            android:backgroundTint="#B0BEC5" />
-
+            android:layout_marginStart="8dp"
+            android:text="Save PDF" />
     </LinearLayout>
 
     <com.example.pdfedi.ZoomableRecyclerView
         android:id="@+id/pdfRecyclerView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="8dp"
-        android:clipToPadding="false"/>
+        android:layout_height="match_parent"
+        android:layout_above="@id/bottomToolbar"
+        android:layout_below="@id/topToolbar"
+        android:clipToPadding="false"
+        android:padding="8dp" />
 
-</LinearLayout>
+    <LinearLayout
+        android:id="@+id/bottomToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="@color/white"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/btnHand"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hand"
+            android:backgroundTint="#4CAF50" /> <Button
+        android:id="@+id/btnMarker"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="Marker"
+        android:backgroundTint="#B0BEC5" /> </LinearLayout>
+
+</RelativeLayout>

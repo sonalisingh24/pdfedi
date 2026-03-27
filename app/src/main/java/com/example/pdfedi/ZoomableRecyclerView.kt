@@ -2,6 +2,7 @@ package com.example.pdfedi
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -17,7 +18,6 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
     private val minScale = 1.0f
     private val maxScale = 4.0f
 
-    // NEW: We will flip this switch from MainActivity when you click the Pen button!
     var isDrawingMode = false
 
     private val scaleDetector: ScaleGestureDetector
@@ -26,6 +26,8 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
     init {
         scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
+                if (isDrawingMode) return false // STRICT MODE: No zooming while drawing
+
                 val previousScale = scaleFactor
                 scaleFactor *= detector.scaleFactor
                 scaleFactor = Math.max(minScale, Math.min(scaleFactor, maxScale))
@@ -34,6 +36,7 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
                 val focusY = detector.focusY
                 translateX += (focusX - translateX) * (1f - scaleFactor / previousScale)
                 translateY += (focusY - translateY) * (1f - scaleFactor / previousScale)
+
                 fixBounds()
                 invalidate()
                 return true
@@ -42,6 +45,8 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
 
         gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isDrawingMode) return false // STRICT MODE: No zooming while drawing
+
                 if (scaleFactor > minScale) {
                     scaleFactor = minScale
                     translateX = 0f
@@ -57,11 +62,10 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
             }
 
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
-                // THE FIX: Allow 1-finger panning in ALL directions if zoomed in.
-                // If the Pen is ON, we force the user to use 2 fingers to pan so they can still draw!
-                val isTwoFingers = e2.pointerCount > 1
+                if (isDrawingMode) return false // STRICT MODE: Screen is totally frozen
 
-                if (scaleFactor > 1.0f && (!isDrawingMode || isTwoFingers)) {
+                // If drawing is OFF and zoomed in, allow 1-finger panning (perfect for mouse)
+                if (scaleFactor > 1.0f) {
                     translateX -= distanceX
                     translateY -= distanceY
                     fixBounds()
@@ -73,6 +77,14 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
         })
     }
 
+    private fun fixBounds() {
+        val maxTranslateX = width * (scaleFactor - 1f)
+        val maxTranslateY = height * (scaleFactor - 1f)
+
+        translateX = Math.max(-maxTranslateX, Math.min(0f, translateX))
+        translateY = Math.max(-maxTranslateY, Math.min(0f, translateY))
+    }
+
     override fun dispatchDraw(canvas: Canvas) {
         canvas.save()
         canvas.translate(translateX, translateY)
@@ -80,34 +92,29 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
         super.dispatchDraw(canvas)
         canvas.restore()
     }
+    // THE SHIELD: Stops the RecyclerView from stealing touches from the drawing canvas
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        if (isDrawingMode) {
+            return false
+        }
+        return super.onInterceptTouchEvent(e)
+    }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(ev)
         gestureDetector.onTouchEvent(ev)
 
         val inverseEvent = MotionEvent.obtain(ev)
-        inverseEvent.setLocation(
-            (ev.x - translateX) / scaleFactor,
-            (ev.y - translateY) / scaleFactor
-        )
+
+        // THE FIX: Use a true Android Matrix to translate the entire touch history perfectly
+        val matrix = Matrix()
+        matrix.postTranslate(-translateX, -translateY)
+        matrix.postScale(1f / scaleFactor, 1f / scaleFactor)
+        inverseEvent.transform(matrix)
 
         val handled = super.dispatchTouchEvent(inverseEvent)
         inverseEvent.recycle()
 
-        // THE FIX: Block the native vertical list scroll if we are panning around a zoomed page
-        val isTwoFingers = ev.pointerCount > 1
-        if (scaleFactor > 1.0f && (!isDrawingMode || isTwoFingers) && ev.actionMasked == MotionEvent.ACTION_MOVE) {
-            return true
-        }
-
         return handled
-    }
-    // This calculates the exact edges of the page and stops panning from passing them
-    private fun fixBounds() {
-        val maxTranslateX = width * (scaleFactor - 1f)
-        val maxTranslateY = height * (scaleFactor - 1f)
-
-        translateX = Math.max(-maxTranslateX, Math.min(0f, translateX))
-        translateY = Math.max(-maxTranslateY, Math.min(0f, translateY))
     }
 }

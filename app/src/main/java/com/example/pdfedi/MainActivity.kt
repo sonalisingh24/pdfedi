@@ -22,15 +22,17 @@ class MainActivity : AppCompatActivity() {
 
     // === UI Variables ===
     private lateinit var btnOpenPdf: Button
-    private lateinit var btnToggleDraw: Button
+    private lateinit var btnSavePdf: Button
+    private lateinit var btnHand: Button
+    private lateinit var btnMarker: Button
     private lateinit var pdfRecyclerView: ZoomableRecyclerView
 
     // === State Variables ===
-    private var isDrawing = false
+    private var isDrawing = false // Starts in Hand Mode (false)
     private var pdfRenderer: PdfRenderer? = null
     private var cachedPdfFile: File? = null
 
-    // === File Picker Launcher ===
+    // === File Picker ===
     private val openDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -41,47 +43,67 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 1. Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
 
-        // 2. Link UI variables to the XML layout
         btnOpenPdf = findViewById(R.id.btnOpenPdf)
-        btnToggleDraw = findViewById(R.id.btnToggleDraw)
+        btnSavePdf = findViewById(R.id.btnSavePdf)
+        btnHand = findViewById(R.id.btnHand)
+        btnMarker = findViewById(R.id.btnMarker)
         pdfRecyclerView = findViewById(R.id.pdfRecyclerView)
 
-        // 3. Set up the RecyclerView to scroll vertically
-        pdfRecyclerView.layoutManager = LinearLayoutManager(this)
+        // THE PADLOCK: This totally disables native vertical scrolling when Marker is ON
+        pdfRecyclerView.layoutManager = object : LinearLayoutManager(this) {
+            override fun canScrollVertically(): Boolean {
+                return !isDrawing
+            }
+        }
 
-        // 4. Open PDF Button Logic
+        // --- BUTTON CLICKS ---
+
         btnOpenPdf.setOnClickListener {
             openDocumentLauncher.launch(arrayOf("application/pdf"))
         }
 
-        // 5. Toggle Draw Button Logic (The Master Switch)
-        btnToggleDraw.setOnClickListener {
-            isDrawing = !isDrawing
+        btnSavePdf.setOnClickListener {
+            Toast.makeText(this, "Save functionality coming soon!", Toast.LENGTH_SHORT).show()
+        }
 
-            // Update the Button UI
-            if (isDrawing) {
-                btnToggleDraw.text = "Draw: ON"
-                btnToggleDraw.setBackgroundColor(Color.parseColor("#4CAF50")) // Green
-            } else {
-                btnToggleDraw.text = "Draw: OFF"
-                btnToggleDraw.setBackgroundColor(Color.parseColor("#B0BEC5")) // Gray
-            }
+        // 1. Hand Button (Scroll/Pan Mode)
+        btnHand.setOnClickListener {
+            isDrawing = false
+            btnHand.setBackgroundColor(Color.parseColor("#4CAF50")) // Turn Hand Green
+            btnMarker.setBackgroundColor(Color.parseColor("#B0BEC5")) // Turn Marker Gray
+            updateModes()
+        }
 
-            // Tell the Zoom Engine to switch touch modes
-            pdfRecyclerView.isDrawingMode = isDrawing
-
-            // Tell the Adapter to update the drawing glass on all visible pages
-            val adapter = pdfRecyclerView.adapter as? PdfPageAdapter
-            if (adapter != null) {
-                adapter.isDrawingMode = isDrawing
-                adapter.notifyDataSetChanged() // Instantly refreshes the screen
-            }
+        // 2. Marker Button (Draw Mode)
+        btnMarker.setOnClickListener {
+            isDrawing = true
+            btnMarker.setBackgroundColor(Color.parseColor("#4CAF50")) // Turn Marker Green
+            btnHand.setBackgroundColor(Color.parseColor("#B0BEC5")) // Turn Hand Gray
+            updateModes()
         }
     }
 
+    // Tells the Engine and Adapter to switch states immediately
+    // Tells the Engine and Adapter to switch states SILENTLY
+    private fun updateModes() {
+        // 1. Tell the Engine how to handle touches
+        pdfRecyclerView.isDrawingMode = isDrawing
+
+        // 2. Tell the Adapter to remember the mode for any future pages you scroll to
+        val adapter = pdfRecyclerView.adapter as? PdfPageAdapter
+        if (adapter != null) {
+            adapter.isDrawingMode = isDrawing
+        }
+
+        // 3. THE FIX: Silently update the pages already on the screen without reloading them!
+        for (i in 0 until pdfRecyclerView.childCount) {
+            val child = pdfRecyclerView.getChildAt(i)
+            val drawView = child.findViewById<CustomDrawView>(R.id.drawView)
+            drawView?.isDrawingEnabled = isDrawing
+        }
+    }
     private fun loadPdfFromUri(uri: Uri) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -109,20 +131,13 @@ class MainActivity : AppCompatActivity() {
     private fun displayPdf() {
         cachedPdfFile?.let { file ->
             try {
-                // Clean up the old renderer if opening a new file
                 pdfRenderer?.close()
-
                 val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                 pdfRenderer = PdfRenderer(fileDescriptor)
 
-                // Pass the renderer to our Adapter
                 val adapter = PdfPageAdapter(pdfRenderer!!, pdfRenderer!!.pageCount)
-
-                // Make sure the adapter knows the current button state when loading a new file!
                 adapter.isDrawingMode = isDrawing
-
                 pdfRecyclerView.adapter = adapter
-
             } catch (e: Exception) {
                 e.printStackTrace()
             }
