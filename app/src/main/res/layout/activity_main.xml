@@ -13,15 +13,18 @@
         android:elevation="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="8dp">
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
-        <ImageButton android:id="@+id/btnOpenPdf" android:layout_width="48dp" android:layout_height="48dp" android:background="?selectableItemBackgroundBorderless" android:src="@drawable/ic_open" android:tint="#424242" />
-        <ImageButton android:id="@+id/btnSavePdf" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:background="?selectableItemBackgroundBorderless" android:src="@drawable/ic_save" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnOpenPdf" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_open" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnSavePdf" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:layout_marginStart="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_save" android:tint="#424242" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <ImageButton android:id="@+id/btnUndo" android:layout_width="48dp" android:layout_height="48dp" android:background="?selectableItemBackgroundBorderless" android:src="@drawable/ic_undo" android:tint="#424242" />
-        <ImageButton android:id="@+id/btnRedo" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:background="?selectableItemBackgroundBorderless" android:src="@drawable/ic_redo" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnUndo" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_undo" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnRedo" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:layout_marginStart="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_redo" android:tint="#424242" />
     </LinearLayout>
 
     <com.example.pdfedi.ZoomableRecyclerView

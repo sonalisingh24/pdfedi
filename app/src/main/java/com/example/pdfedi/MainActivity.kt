@@ -96,12 +96,16 @@ class MainActivity : AppCompatActivity() {
 
         btnUndo.setOnClickListener {
             val page = StrokeManager.undo()
-            if (page != null) refreshSpecificPage(page)
+            if (page != null) {
+                refreshSpecificPage(page)
+            }
         }
 
         btnRedo.setOnClickListener {
             val page = StrokeManager.redo()
-            if (page != null) refreshSpecificPage(page)
+            if (page != null) {
+                refreshSpecificPage(page)
+            }
         }
 
         // --- TOOL CLICKS ---

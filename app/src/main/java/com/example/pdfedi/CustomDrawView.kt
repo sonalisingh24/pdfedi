@@ -79,7 +79,13 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                 currentStroke?.path?.lineTo(touchX, touchY)
                 currentStroke?.points?.add(PointF(touchX, touchY))
 
-                currentStroke?.let { StrokeManager.addStroke(it) }
+                // THE FIX: Palm Rejection.
+                // A real drawing has dozens of points. An accidental tap only has 1 or 2.
+                val pointCount = currentStroke?.points?.size ?: 0
+                if (pointCount > 2) {
+                    currentStroke?.let { StrokeManager.addStroke(it) }
+                }
+
                 currentStroke = null
             }
             else -> return false
