@@ -4,6 +4,7 @@ import android.graphics.Path
 import android.graphics.PointF
 
 // Remembers exactly how a line was drawn, on what page, and its coordinates for saving
+// Replace your current data class with this:
 data class Stroke(
     val pageIndex: Int,
     val points: MutableList<PointF>,
@@ -11,7 +12,9 @@ data class Stroke(
     val width: Float,
     val isEraser: Boolean,
     val isHighlighter: Boolean,
-    var path: Path = Path() // For fast Android drawing
+    val canvasWidth: Float,   // NEW: Remembers how wide the screen was
+    val canvasHeight: Float,  // NEW: Remembers how tall the screen was
+    var path: Path = Path()
 )
 
 object StrokeManager {

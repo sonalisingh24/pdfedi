@@ -67,7 +67,19 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 currentPaint = createPaint()
-                currentStroke = Stroke(pageIndex, mutableListOf(), currentDrawColor, currentStrokeWidth, isEraser, isHighlighter)
+
+                // THE FIX: Grab the exact pixel width and height of this specific view
+                currentStroke = Stroke(
+                    pageIndex,
+                    mutableListOf(),
+                    currentDrawColor,
+                    currentStrokeWidth,
+                    isEraser,
+                    isHighlighter,
+                    this.width.toFloat(),   // Passing the True Width
+                    this.height.toFloat()   // Passing the True Height
+                )
+
                 currentStroke?.path?.moveTo(touchX, touchY)
                 currentStroke?.points?.add(PointF(touchX, touchY))
             }

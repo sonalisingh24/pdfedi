@@ -175,18 +175,25 @@ class MainActivity : AppCompatActivity() {
                     contentStream.setStrokingColor(Color.red(stroke.color), Color.green(stroke.color), Color.blue(stroke.color))
 
                     // The magic scale factor: Our adapter renders the page at 2.5x zoom. We have to divide by 2.5 to get true PDF coordinates.
-                    val pdfScale = 2.5f
+                    // THE FIX: True Scale Math
+                    val pdfWidth = page.mediaBox.width
                     val pdfHeight = page.mediaBox.height
-                    contentStream.setLineWidth(stroke.width / pdfScale)
 
-                    // Draw the points
+                    // Calculate the exact mathematical ratio between the phone screen and the PDF file
+                    val scaleX = pdfWidth / stroke.canvasWidth
+                    val scaleY = pdfHeight / stroke.canvasHeight
+
+                    // Adjust pen thickness based on the scale
+                    contentStream.setLineWidth(stroke.width * scaleX)
+
                     val start = stroke.points[0]
-                    // PDF Y-axis is inverted (0 is at the bottom). Android is at the top.
-                    contentStream.moveTo(start.x / pdfScale, pdfHeight - (start.y / pdfScale))
+
+                    // Multiply by our new dynamic scale instead of dividing by a hardcoded 2.5
+                    contentStream.moveTo(start.x * scaleX, pdfHeight - (start.y * scaleY))
 
                     for (i in 1 until stroke.points.size) {
                         val pt = stroke.points[i]
-                        contentStream.lineTo(pt.x / pdfScale, pdfHeight - (pt.y / pdfScale))
+                        contentStream.lineTo(pt.x * scaleX, pdfHeight - (pt.y * scaleY))
                     }
 
                     contentStream.stroke()
