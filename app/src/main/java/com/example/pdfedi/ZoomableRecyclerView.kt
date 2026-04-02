@@ -94,7 +94,9 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
     }
     // THE SHIELD: Stops the RecyclerView from stealing touches from the drawing canvas
     override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
-        if (isDrawingMode) {
+        // If drawing is ON, block 1-finger touches so we can draw.
+        // If 2 fingers are down, return super to let the native RecyclerView scroll vertically!
+        if (isDrawingMode && e.pointerCount == 1) {
             return false
         }
         return super.onInterceptTouchEvent(e)

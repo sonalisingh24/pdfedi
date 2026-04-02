@@ -85,8 +85,13 @@ class MainActivity : AppCompatActivity() {
         btnSizeThick = findViewById(R.id.btnSizeThick)
         pdfRecyclerView = findViewById(R.id.pdfRecyclerView)
 
-        pdfRecyclerView.layoutManager = object : LinearLayoutManager(this) {
-            override fun canScrollVertically(): Boolean { return currentTool == ActiveTool.HAND }
+        pdfRecyclerView.layoutManager = LinearLayoutManager(this)
+        // --- RECEIVE FILE FROM HOME SCREEN ---
+        val pdfPath = intent.getStringExtra("PDF_PATH")
+        if (pdfPath != null) {
+            val file = File(pdfPath)
+            originalUri = Uri.fromFile(file)
+            loadPdfFromUri(originalUri!!)
         }
 
         // --- TOP TOOLBAR CLICKS ---

@@ -61,6 +61,7 @@ class PdfPageAdapter(
                 try {
                     val page = pdfRenderer.openPage(position)
                     bitmap = Bitmap.createBitmap((page.width * 2.5).toInt(), (page.height * 2.5).toInt(), Bitmap.Config.ARGB_8888)
+                    bitmap?.eraseColor(Color.WHITE)
                     page.render(bitmap!!, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     page.close()
                 } catch (e: Exception) {
