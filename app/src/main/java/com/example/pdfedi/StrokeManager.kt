@@ -3,8 +3,6 @@ package com.example.pdfedi
 import android.graphics.Path
 import android.graphics.PointF
 
-// Remembers exactly how a line was drawn, on what page, and its coordinates for saving
-// Replace your current data class with this:
 data class Stroke(
     val pageIndex: Int,
     val points: MutableList<PointF>,
@@ -12,9 +10,9 @@ data class Stroke(
     val width: Float,
     val isEraser: Boolean,
     val isHighlighter: Boolean,
-    val canvasWidth: Float,   // NEW: Remembers how wide the screen was
-    val canvasHeight: Float,  // NEW: Remembers how tall the screen was
-    var path: Path = Path()
+    val canvasWidth: Float,
+    val canvasHeight: Float,
+    val path: Path = Path()
 )
 
 object StrokeManager {
@@ -23,10 +21,9 @@ object StrokeManager {
 
     fun addStroke(stroke: Stroke) {
         globalStrokes.add(stroke)
-        redoStrokes.clear() // If you draw a new line, you lose your redo future
+        redoStrokes.clear()
     }
 
-    // Returns the page number that was modified so we can instantly refresh it
     fun undo(): Int? {
         if (globalStrokes.isNotEmpty()) {
             val last = globalStrokes.removeLast()
@@ -38,10 +35,39 @@ object StrokeManager {
 
     fun redo(): Int? {
         if (redoStrokes.isNotEmpty()) {
-            val stroke = redoStrokes.removeLast()
-            globalStrokes.add(stroke)
-            return stroke.pageIndex
+            val next = redoStrokes.removeLast()
+            globalStrokes.add(next)
+            return next.pageIndex
         }
         return null
+    }
+
+    // NEW: Vector Object Eraser Logic
+    fun eraseStrokesAt(x: Float, y: Float, pageIndex: Int, radius: Float): Boolean {
+        var strokeErased = false
+        val iterator = globalStrokes.iterator()
+
+        while (iterator.hasNext()) {
+            val stroke = iterator.next()
+            if (stroke.pageIndex != pageIndex) continue
+
+            // Check if the touch point is close to any point in the stroke
+            for (point in stroke.points) {
+                val dx = point.x - x
+                val dy = point.y - y
+                val distanceSquared = dx * dx + dy * dy
+
+                if (distanceSquared <= radius * radius) {
+                    // We hit a stroke! Remove it entirely.
+                    iterator.remove()
+
+                    // Add to redo stack so the user can 'Undo' their erasure
+                    redoStrokes.add(stroke)
+                    strokeErased = true
+                    break
+                }
+            }
+        }
+        return strokeErased
     }
 }

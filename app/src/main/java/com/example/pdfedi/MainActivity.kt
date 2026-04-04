@@ -5,24 +5,27 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
-import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
+import com.example.pdfedi.database.StudyNote
 
 class MainActivity : AppCompatActivity() {
+
+    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER, NOTE }
 
     // === UI Variables ===
     private lateinit var btnOpenPdf: ImageButton
@@ -30,35 +33,34 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnUndo: ImageButton
     private lateinit var btnRedo: ImageButton
 
+    // Tool Palette
     private lateinit var btnHand: ImageButton
     private lateinit var btnMarker: ImageButton
     private lateinit var btnHighlighter: ImageButton
     private lateinit var btnEraser: ImageButton
+    private lateinit var btnNote: Button
 
+    // Settings
     private lateinit var btnColorRed: Button
     private lateinit var btnColorGreen: Button
     private lateinit var btnColorBlue: Button
-
     private lateinit var btnSizeThin: Button
     private lateinit var btnSizeMed: Button
     private lateinit var btnSizeThick: Button
 
+    // Toggles
+    private lateinit var btnToggleReadingMode: Button
+    private lateinit var btnToggleImmersive: Button
+
     private lateinit var pdfRecyclerView: ZoomableRecyclerView
-
-    // === Engine State ===
-    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER }
-    private var currentTool = ActiveTool.HAND
-    private var currentColor = Color.parseColor("#F44336")
-    private var currentSize = 8f
-
     private var pdfRenderer: PdfRenderer? = null
-    private var cachedPdfFile: File? = null
-    private var originalUri: Uri? = null // WE NEED THIS TO OVERWRITE THE FILE
+
+    // ViewModel Integration
+    private val viewModel: PdfViewModel by viewModels()
 
     private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
-            originalUri = it
-            loadPdfFromUri(it)
+            viewModel.loadPdf(it) { displayPdf() }
         }
     }
 
@@ -68,6 +70,18 @@ class MainActivity : AppCompatActivity() {
 
         PDFBoxResourceLoader.init(applicationContext)
 
+        initViews()
+        setupClickListeners()
+        observeViewModel()
+
+        val pdfPath = intent.getStringExtra("PDF_PATH")
+        if (pdfPath != null) {
+            val file = File(pdfPath)
+            viewModel.loadPdf(Uri.fromFile(file)) { displayPdf() }
+        }
+    }
+
+    private fun initViews() {
         btnOpenPdf = findViewById(R.id.btnOpenPdf)
         btnSavePdf = findViewById(R.id.btnSavePdf)
         btnUndo = findViewById(R.id.btnUndo)
@@ -77,224 +91,251 @@ class MainActivity : AppCompatActivity() {
         btnMarker = findViewById(R.id.btnMarker)
         btnHighlighter = findViewById(R.id.btnHighlighter)
         btnEraser = findViewById(R.id.btnEraser)
+        btnNote = findViewById(R.id.btnNote)
+
         btnColorRed = findViewById(R.id.btnColorRed)
         btnColorGreen = findViewById(R.id.btnColorGreen)
         btnColorBlue = findViewById(R.id.btnColorBlue)
+
         btnSizeThin = findViewById(R.id.btnSizeThin)
         btnSizeMed = findViewById(R.id.btnSizeMed)
         btnSizeThick = findViewById(R.id.btnSizeThick)
+
+        btnToggleReadingMode = findViewById(R.id.btnToggleReadingMode)
+        btnToggleImmersive = findViewById(R.id.btnToggleImmersive)
+
         pdfRecyclerView = findViewById(R.id.pdfRecyclerView)
-
         pdfRecyclerView.layoutManager = LinearLayoutManager(this)
-        // --- RECEIVE FILE FROM HOME SCREEN ---
-        val pdfPath = intent.getStringExtra("PDF_PATH")
-        if (pdfPath != null) {
-            val file = File(pdfPath)
-            originalUri = Uri.fromFile(file)
-            loadPdfFromUri(originalUri!!)
-        }
+    }
 
-        // --- TOP TOOLBAR CLICKS ---
+    private fun setupClickListeners() {
         btnOpenPdf.setOnClickListener { openDocumentLauncher.launch(arrayOf("application/pdf")) }
-
-        btnSavePdf.setOnClickListener { savePdfToFile() }
+        btnSavePdf.setOnClickListener { viewModel.savePdf() }
 
         btnUndo.setOnClickListener {
             val page = StrokeManager.undo()
-            if (page != null) {
-                refreshSpecificPage(page)
-            }
+            if (page != null) refreshSpecificPage(page)
         }
 
         btnRedo.setOnClickListener {
             val page = StrokeManager.redo()
-            if (page != null) {
-                refreshSpecificPage(page)
+            if (page != null) refreshSpecificPage(page)
+        }
+
+        btnHand.setOnClickListener { viewModel.selectTool(ActiveTool.HAND) }
+        btnMarker.setOnClickListener { viewModel.selectTool(ActiveTool.MARKER) }
+        btnHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.HIGHLIGHTER) }
+        btnEraser.setOnClickListener { viewModel.selectTool(ActiveTool.ERASER) }
+        btnNote.setOnClickListener { viewModel.selectTool(ActiveTool.NOTE) }
+
+        btnColorRed.setOnClickListener { viewModel.setColor(Color.parseColor("#F44336")) }
+        btnColorGreen.setOnClickListener { viewModel.setColor(Color.parseColor("#4CAF50")) }
+        btnColorBlue.setOnClickListener { viewModel.setColor(Color.parseColor("#2196F3")) }
+
+        btnSizeThin.setOnClickListener { viewModel.setStrokeWidth(4f) }
+        btnSizeMed.setOnClickListener { viewModel.setStrokeWidth(8f) }
+        btnSizeThick.setOnClickListener { viewModel.setStrokeWidth(16f) }
+
+        btnToggleImmersive.setOnClickListener { viewModel.toggleImmersiveMode() }
+
+        btnToggleReadingMode.setOnClickListener {
+            val currentState = viewModel.uiState.value.readingMode
+            val nextMode = when(currentState) {
+                ReadingMode.NORMAL -> ReadingMode.SEPIA
+                ReadingMode.SEPIA -> ReadingMode.DARK
+                ReadingMode.DARK -> ReadingMode.NORMAL
+            }
+            viewModel.setReadingMode(nextMode)
+        }
+
+        findViewById<Button>(R.id.btnSearch).setOnClickListener { showSearchDialog() }
+    }
+
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            viewModel.uiState.collectLatest { state ->
+                updateToolSelectionUI(state.activeTool)
+                updateSizeSelectionUI(state.strokeWidth)
+                toggleSystemUI(state.isImmersiveMode)
+                applySettingsToCanvas(state)
+
+                if (state.isSaving) {
+                    Toast.makeText(this@MainActivity, "Saving PDF...", Toast.LENGTH_SHORT).show()
+                } else if (state.saveSuccess == true) {
+                    Toast.makeText(this@MainActivity, "Saved Successfully!", Toast.LENGTH_LONG).show()
+                    viewModel.resetSaveState()
+                } else if (state.saveSuccess == false) {
+                    Toast.makeText(this@MainActivity, "Failed to save.", Toast.LENGTH_SHORT).show()
+                    viewModel.resetSaveState()
+                }
+            }
+        }
+    }
+
+    private fun applySettingsToCanvas(state: EditorState) {
+        pdfRecyclerView.isDrawingMode = state.isDrawingMode
+        val adapter = pdfRecyclerView.adapter as? PdfPageAdapter
+
+        if (adapter != null) {
+            val modeChanged = adapter.currentState.readingMode != state.readingMode
+            adapter.currentState = state
+
+            if (modeChanged) {
+                adapter.notifyDataSetChanged()
             }
         }
 
-        // --- TOOL CLICKS ---
-        btnHand.setOnClickListener { selectTool(ActiveTool.HAND) }
-        btnMarker.setOnClickListener { selectTool(ActiveTool.MARKER) }
-        btnHighlighter.setOnClickListener { selectTool(ActiveTool.HIGHLIGHTER) }
-        btnEraser.setOnClickListener { selectTool(ActiveTool.ERASER) }
-
-        // --- COLOR & SIZE CLICKS ---
-        btnColorRed.setOnClickListener { currentColor = Color.parseColor("#F44336"); applySettingsToCanvas() }
-        btnColorGreen.setOnClickListener { currentColor = Color.parseColor("#4CAF50"); applySettingsToCanvas() }
-        btnColorBlue.setOnClickListener { currentColor = Color.parseColor("#2196F3"); applySettingsToCanvas() }
-        btnSizeThin.setOnClickListener { currentSize = 4f; selectSize(btnSizeThin) }
-        btnSizeMed.setOnClickListener { currentSize = 8f; selectSize(btnSizeMed) }
-        btnSizeThick.setOnClickListener { currentSize = 16f; selectSize(btnSizeThick) }
-
-        selectTool(ActiveTool.HAND)
-        selectSize(btnSizeMed)
-    }
-
-    // --- NEW: Refresh a single page smoothly for Undo/Redo ---
-    private fun refreshSpecificPage(pageIndex: Int) {
         for (i in 0 until pdfRecyclerView.childCount) {
             val child = pdfRecyclerView.getChildAt(i)
             val drawView = child.findViewById<CustomDrawView>(R.id.drawView)
-            if (drawView?.pageIndex == pageIndex) {
-                drawView.invalidate() // Instantly repaints without lag
-            }
-        }
-    }
 
-    // --- NEW: The PDFBox Save Engine ---
-    private fun savePdfToFile() {
-        if (cachedPdfFile == null || originalUri == null) {
-            Toast.makeText(this, "No PDF loaded!", Toast.LENGTH_SHORT).show()
-            return
-        }
+            if (drawView != null) {
+                drawView.isDrawingEnabled = state.isDrawingMode
+                drawView.currentDrawColor = state.strokeColor
+                drawView.currentStrokeWidth = state.strokeWidth
+                drawView.isEraser = state.activeTool == ActiveTool.ERASER
+                drawView.isHighlighter = state.activeTool == ActiveTool.HIGHLIGHTER
 
-        Toast.makeText(this, "Saving PDF...", Toast.LENGTH_SHORT).show()
+                drawView.isNoteTool = state.activeTool == ActiveTool.NOTE
+                drawView.currentNotes = state.studyNotes.filter { it.pageIndex == drawView.pageIndex }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                // 1. Load the background file
-                val document = PDDocument.load(cachedPdfFile)
-
-                // 2. Loop through every stroke in memory
-                for (stroke in StrokeManager.globalStrokes) {
-                    if (stroke.isEraser) continue // We skip saving erasers to protect the text
-                    if (stroke.points.isEmpty()) continue
-
-                    val page = document.getPage(stroke.pageIndex)
-                    val contentStream = PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)
-
-                    // Set up Highlighter Transparency
-                    if (stroke.isHighlighter) {
-                        val graphicsState = PDExtendedGraphicsState()
-                        graphicsState.strokingAlphaConstant = 0.4f
-                        contentStream.setGraphicsStateParameters(graphicsState)
-                    }
-
-                    // Set Color and Size
-                    contentStream.setStrokingColor(Color.red(stroke.color), Color.green(stroke.color), Color.blue(stroke.color))
-
-                    // The magic scale factor: Our adapter renders the page at 2.5x zoom. We have to divide by 2.5 to get true PDF coordinates.
-                    // THE FIX: True Scale Math
-                    val pdfWidth = page.mediaBox.width
-                    val pdfHeight = page.mediaBox.height
-
-                    // Calculate the exact mathematical ratio between the phone screen and the PDF file
-                    val scaleX = pdfWidth / stroke.canvasWidth
-                    val scaleY = pdfHeight / stroke.canvasHeight
-
-                    // Adjust pen thickness based on the scale
-                    contentStream.setLineWidth(stroke.width * scaleX)
-
-                    val start = stroke.points[0]
-
-                    // Multiply by our new dynamic scale instead of dividing by a hardcoded 2.5
-                    contentStream.moveTo(start.x * scaleX, pdfHeight - (start.y * scaleY))
-
-                    for (i in 1 until stroke.points.size) {
-                        val pt = stroke.points[i]
-                        contentStream.lineTo(pt.x * scaleX, pdfHeight - (pt.y * scaleY))
-                    }
-
-                    contentStream.stroke()
-                    contentStream.close()
-                }
-
-                // 3. Overwrite the original file URI
-                val outputStream = contentResolver.openOutputStream(originalUri!!, "wt")
-                if (outputStream != null) {
-                    document.save(outputStream)
-                    outputStream.close()
-                }
-                document.close()
-
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Saved Successfully!", Toast.LENGTH_LONG).show()
-                }
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Failed to save.", Toast.LENGTH_SHORT).show()
+                drawView.onNoteInteraction = { x, y, clickedNote ->
+                    showNoteDialog(drawView.pageIndex, x, y, clickedNote)
                 }
             }
         }
     }
 
-    private fun selectTool(tool: ActiveTool) {
-        currentTool = tool
+    private fun toggleSystemUI(isImmersive: Boolean) {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+
+        if (isImmersive) {
+            windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun updateToolSelectionUI(tool: ActiveTool) {
         btnHand.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnMarker.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
+        btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
 
         when (tool) {
             ActiveTool.HAND -> btnHand.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.MARKER -> btnMarker.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.HIGHLIGHTER -> btnHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.ERASER -> btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+            ActiveTool.NOTE -> btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
         }
-        applySettingsToCanvas()
     }
 
-    private fun selectSize(activeButton: Button) {
+    private fun updateSizeSelectionUI(size: Float) {
         btnSizeThin.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#757575"))
         btnSizeMed.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#757575"))
         btnSizeThick.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#757575"))
-        activeButton.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
-        applySettingsToCanvas()
-    }
 
-    private fun applySettingsToCanvas() {
-        val isDrawing = currentTool != ActiveTool.HAND
-        pdfRecyclerView.isDrawingMode = isDrawing
-        val adapter = pdfRecyclerView.adapter as? PdfPageAdapter
-        if (adapter != null) {
-            adapter.isDrawingMode = isDrawing
-        }
-        for (i in 0 until pdfRecyclerView.childCount) {
-            val child = pdfRecyclerView.getChildAt(i)
-            val drawView = child.findViewById<CustomDrawView>(R.id.drawView)
-            if (drawView != null) {
-                drawView.isDrawingEnabled = isDrawing
-                drawView.currentDrawColor = currentColor
-                drawView.currentStrokeWidth = currentSize
-                drawView.isEraser = currentTool == ActiveTool.ERASER
-                drawView.isHighlighter = currentTool == ActiveTool.HIGHLIGHTER
-            }
-        }
-    }
-
-    private fun loadPdfFromUri(uri: Uri) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                // Clear the old drawing memory when a new file opens!
-                StrokeManager.globalStrokes.clear()
-                StrokeManager.redoStrokes.clear()
-
-                val inputStream = contentResolver.openInputStream(uri)
-                val tempFile = File(cacheDir, "temp_working_pdf.pdf")
-                val outputStream = FileOutputStream(tempFile)
-                inputStream?.copyTo(outputStream)
-                inputStream?.close()
-                outputStream.close()
-                cachedPdfFile = tempFile
-                withContext(Dispatchers.Main) { displayPdf() }
-            } catch (e: Exception) { }
+        when (size) {
+            4f -> btnSizeThin.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
+            8f -> btnSizeMed.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
+            16f -> btnSizeThick.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
         }
     }
 
     private fun displayPdf() {
-        cachedPdfFile?.let { file ->
+        viewModel.cachedFile?.let { file ->
             try {
                 pdfRenderer?.close()
                 val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                 pdfRenderer = PdfRenderer(fileDescriptor)
                 val adapter = PdfPageAdapter(pdfRenderer!!, pdfRenderer!!.pageCount)
+
+                adapter.currentState = viewModel.uiState.value
                 pdfRecyclerView.adapter = adapter
-                applySettingsToCanvas()
-            } catch (e: Exception) { }
+
+                applySettingsToCanvas(viewModel.uiState.value)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
+    }
+
+    private fun refreshSpecificPage(pageIndex: Int) {
+        for (i in 0 until pdfRecyclerView.childCount) {
+            val child = pdfRecyclerView.getChildAt(i)
+            val drawView = child.findViewById<CustomDrawView>(R.id.drawView)
+            if (drawView?.pageIndex == pageIndex) {
+                drawView.invalidate()
+            }
+        }
+    }
+
+    private fun showNoteDialog(pageIndex: Int, x: Float, y: Float, existingNote: StudyNote?) {
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle(if (existingNote == null) "Add Study Note" else "Edit Note")
+
+        val input = android.widget.EditText(this)
+        input.setText(existingNote?.textContent ?: "")
+        input.hint = "Type your notes here..."
+        input.setLines(4)
+        builder.setView(input)
+
+        builder.setPositiveButton("Save") { dialog, _ ->
+            val text = input.text.toString()
+            if (text.isNotBlank()) {
+                val note = StudyNote(
+                    id = existingNote?.id ?: 0,
+                    documentUri = viewModel.uiState.value.activeDocumentUri,
+                    pageIndex = pageIndex,
+                    x = existingNote?.x ?: x,
+                    y = existingNote?.y ?: y,
+                    textContent = text
+                )
+                viewModel.saveNote(note)
+            }
+            dialog.dismiss()
+        }
+
+        if (existingNote != null) {
+            builder.setNeutralButton("Delete") { dialog, _ ->
+                viewModel.deleteNote(existingNote)
+                dialog.dismiss()
+            }
+        }
+
+        builder.setNegativeButton("Cancel") { dialog, _ -> dialog.cancel() }
+        builder.show()
+    }
+
+    private fun showSearchDialog() {
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle("Search Textbook")
+
+        val input = android.widget.EditText(this)
+        input.hint = "Enter keyword..."
+        builder.setView(input)
+
+        builder.setPositiveButton("Search") { dialog, _ ->
+            val query = input.text.toString()
+            if (query.isNotBlank()) {
+                Toast.makeText(this, "Searching...", Toast.LENGTH_SHORT).show()
+
+                viewModel.searchPdf(query) { matchingPages ->
+                    if (matchingPages.isNotEmpty()) {
+                        pdfRecyclerView.scrollToPosition(matchingPages[0])
+                        Toast.makeText(this, "Found on page ${matchingPages[0] + 1}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "No matches found.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            dialog.dismiss()
+        }
+        builder.setNegativeButton("Cancel") { dialog, _ -> dialog.cancel() }
+        builder.show()
     }
 
     override fun onDestroy() {

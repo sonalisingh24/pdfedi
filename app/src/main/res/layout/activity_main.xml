@@ -1,79 +1,140 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#ECECEC">
+    android:fitsSystemWindows="true"
+    android:background="#F0F4F8"> <com.google.android.material.card.MaterialCardView
+    android:id="@+id/topToolbarCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_alignParentTop="true"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginTop="12dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="6dp"
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:id="@+id/topToolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
         android:background="@color/white"
-        android:elevation="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:padding="8dp">
 
-        <ImageButton android:id="@+id/btnOpenPdf" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_open" android:tint="#424242" />
-        <ImageButton android:id="@+id/btnSavePdf" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:layout_marginStart="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_save" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnOpenPdf" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_open" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnSavePdf" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:layout_marginStart="4dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_save" android:tint="#424242" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <ImageButton android:id="@+id/btnUndo" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_undo" android:tint="#424242" />
-        <ImageButton android:id="@+id/btnRedo" android:layout_width="64dp" android:layout_height="64dp" android:padding="16dp" android:layout_marginStart="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_redo" android:tint="#424242" />
+        <Button
+            android:id="@+id/btnSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Search"
+            android:textSize="10sp"
+            android:backgroundTint="#F0F4F8"
+            android:textColor="#263238"
+            android:layout_marginEnd="4dp"
+            android:padding="0dp"
+            app:cornerRadius="8dp"/>
+
+        <Button
+            android:id="@+id/btnToggleReadingMode"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Reading"
+            android:textSize="10sp"
+            android:backgroundTint="#F0F4F8"
+            android:textColor="#263238"
+            android:layout_marginEnd="4dp"
+            android:padding="0dp"
+            app:cornerRadius="8dp"/>
+
+        <Button
+            android:id="@+id/btnToggleImmersive"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Full"
+            android:textSize="10sp"
+            android:backgroundTint="#F0F4F8"
+            android:textColor="#263238"
+            android:layout_marginEnd="8dp"
+            android:padding="0dp"
+            app:cornerRadius="8dp"/>
+
+        <ImageButton android:id="@+id/btnUndo" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_undo" android:tint="#424242" />
+        <ImageButton android:id="@+id/btnRedo" android:layout_width="40dp" android:layout_height="40dp" android:padding="8dp" android:layout_marginStart="4dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:src="@drawable/ic_redo" android:tint="#424242" />
     </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
 
     <com.example.pdfedi.ZoomableRecyclerView
         android:id="@+id/pdfRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@id/bottomToolbar"
-        android:layout_below="@id/topToolbar"
+        android:layout_above="@id/bottomToolbarCard"
+        android:layout_below="@id/topToolbarCard"
         android:clipToPadding="false"
         android:padding="8dp" />
 
-    <LinearLayout
-        android:id="@+id/bottomToolbar"
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bottomToolbarCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="@color/white"
-        android:elevation="8dp"
-        android:orientation="vertical"
-        android:padding="8dp">
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="12dp"
+        app:strokeWidth="0dp">
 
         <LinearLayout
+            android:id="@+id/bottomToolbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingBottom="8dp">
+            android:background="@color/white"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-            <ImageButton android:id="@+id/btnHand" android:layout_width="48dp" android:layout_height="48dp" android:backgroundTint="#4CAF50" android:src="@drawable/ic_hand" android:tint="@color/white" />
-            <ImageButton android:id="@+id/btnMarker" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="16dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_marker" android:tint="@color/white" />
-            <ImageButton android:id="@+id/btnHighlighter" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="16dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_highlighter" android:tint="@color/white" />
-            <ImageButton android:id="@+id/btnEraser" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="16dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_eraser" android:tint="@color/white" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingBottom="12dp">
+
+                <ImageButton android:id="@+id/btnHand" android:layout_width="48dp" android:layout_height="48dp" android:backgroundTint="#4CAF50" android:src="@drawable/ic_hand" android:tint="@color/white" />
+                <ImageButton android:id="@+id/btnMarker" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="12dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_marker" android:tint="@color/white" />
+                <ImageButton android:id="@+id/btnHighlighter" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="12dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_highlighter" android:tint="@color/white" />
+                <ImageButton android:id="@+id/btnEraser" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="12dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_eraser" android:tint="@color/white" />
+
+                <Button android:id="@+id/btnNote" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginStart="12dp" android:text="Note" android:textSize="12sp" android:backgroundTint="#B0BEC5" android:textColor="@color/white" app:cornerRadius="12dp"/>
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginBottom="12dp"
+                android:background="#E0E0E0" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button android:id="@+id/btnColorRed" android:layout_width="32dp" android:layout_height="32dp" android:backgroundTint="#F44336" app:cornerRadius="16dp" />
+                <Button android:id="@+id/btnColorGreen" android:layout_width="32dp" android:layout_height="32dp" android:layout_marginStart="12dp" android:backgroundTint="#4CAF50" app:cornerRadius="16dp"/>
+                <Button android:id="@+id/btnColorBlue" android:layout_width="32dp" android:layout_height="32dp" android:layout_marginStart="12dp" android:backgroundTint="#2196F3" app:cornerRadius="16dp"/>
+
+                <View android:layout_width="24dp" android:layout_height="match_parent" />
+
+                <Button android:id="@+id/btnSizeThin" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Thin" android:textSize="10sp" android:backgroundTint="#757575" app:cornerRadius="8dp"/>
+                <Button android:id="@+id/btnSizeMed" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="6dp" android:text="Med" android:textSize="10sp" android:backgroundTint="#424242" app:cornerRadius="8dp"/>
+                <Button android:id="@+id/btnSizeThick" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="6dp" android:text="Thick" android:textSize="10sp" android:backgroundTint="#212121" app:cornerRadius="8dp"/>
+            </LinearLayout>
         </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <Button android:id="@+id/btnColorRed" android:layout_width="40dp" android:layout_height="40dp" android:backgroundTint="#F44336" />
-            <Button android:id="@+id/btnColorGreen" android:layout_width="40dp" android:layout_height="40dp" android:layout_marginStart="8dp" android:backgroundTint="#4CAF50" />
-            <Button android:id="@+id/btnColorBlue" android:layout_width="40dp" android:layout_height="40dp" android:layout_marginStart="8dp" android:backgroundTint="#2196F3" />
-
-            <View android:layout_width="24dp" android:layout_height="match_parent" />
-
-            <Button android:id="@+id/btnSizeThin" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Thin" android:textSize="12sp" android:backgroundTint="#757575"/>
-            <Button android:id="@+id/btnSizeMed" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginStart="4dp" android:text="Med" android:textSize="12sp" android:backgroundTint="#424242"/>
-            <Button android:id="@+id/btnSizeThick" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginStart="4dp" android:text="Thick" android:textSize="12sp" android:backgroundTint="#212121"/>
-        </LinearLayout>
-    </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 </RelativeLayout>
