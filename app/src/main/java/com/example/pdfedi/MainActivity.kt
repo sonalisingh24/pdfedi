@@ -224,6 +224,14 @@ class MainActivity : AppCompatActivity() {
         btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
 
+        // Show/Hide the Contextual Settings Panel
+        val settingsPanel = findViewById<View>(R.id.settingsPanelCard)
+        if (tool == ActiveTool.MARKER || tool == ActiveTool.HIGHLIGHTER) {
+            settingsPanel.visibility = View.VISIBLE
+        } else {
+            settingsPanel.visibility = View.GONE
+        }
+
         when (tool) {
             ActiveTool.HAND -> btnHand.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.MARKER -> btnMarker.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
@@ -244,7 +252,6 @@ class MainActivity : AppCompatActivity() {
             16f -> btnSizeThick.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
         }
     }
-
     private fun displayPdf() {
         viewModel.cachedFile?.let { file ->
             try {

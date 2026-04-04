@@ -94,95 +94,41 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         }
 
         for (note in currentNotes) {
-            val rect = RectF(note.x - iconSize/2, note.y - iconSize/2, note.x + iconSize/2, note.y + iconSize/2)
+            val rect = RectF(
+                note.x - iconSize / 2,
+                note.y - iconSize / 2,
+                note.x + iconSize / 2,
+                note.y + iconSize / 2
+            )
             canvas.drawRect(rect, paintNote)
             canvas.drawRect(rect, paintNoteOutline)
         }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!isDrawingEnabled || pageIndex == -1) return false
+        if (pageIndex == -1) return false
 
-        // NEW: Multi-touch / Palm Rejection.
-        // If 2 or more fingers touch, abort drawing and let ZoomableRecyclerView zoom.
+        // SMART TOUCH: Is the user using a dedicated Stylus/Apple Pencil/S-Pen?
+        val isStylus = event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
+
+        // SMART TOUCH: If 2 or more fingers are on screen, ABORT drawing instantly.
         if (event.pointerCount > 1) {
             currentStroke = null
             invalidate()
+            // Tell the parent (ZoomableRecyclerView) to take over for scrolling/zooming
+            parent.requestDisallowInterceptTouchEvent(false)
             return false
         }
+
+        // If drawing is disabled AND we aren't using a stylus, don't do anything.
+        if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraser) return false
 
         val touchX = event.x
         val touchY = event.y
 
-        // NEW: Object Eraser Logic
-        if (isEraser) {
-            when (event.action) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    // Erase any stroke within a 40-pixel radius of the finger
-                    val didErase = StrokeManager.eraseStrokesAt(touchX, touchY, pageIndex, 40f)
-                    if (didErase) invalidate()
-                }
-            }
-            return true
-        }
-
-        // --- Standard Drawing Logic (Pen & Highlighter) ---
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                currentPaint = createPaint()
-                currentStroke = Stroke(
-                    pageIndex,
-                    mutableListOf(),
-                    currentDrawColor,
-                    currentStrokeWidth,
-                    false, // isEraser is false because we handle it above
-                    isHighlighter,
-                    this.width.toFloat(),
-                    this.height.toFloat()
-                )
-
-                currentStroke?.path?.moveTo(touchX, touchY)
-                currentStroke?.points?.add(PointF(touchX, touchY))
-
-                previousX = touchX
-                previousY = touchY
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = Math.abs(touchX - previousX)
-                val dy = Math.abs(touchY - previousY)
-
-                // NEW: Bezier Curve Smoothing
-                // Only register the point if the finger moved far enough (Touch Tolerance)
-                if (dx >= touchTolerance || dy >= touchTolerance) {
-
-                    // Create a smooth curve to the halfway point between previous and current touch
-                    val midX = (previousX + touchX) / 2
-                    val midY = (previousY + touchY) / 2
-                    currentStroke?.path?.quadTo(previousX, previousY, midX, midY)
-
-                    currentStroke?.points?.add(PointF(touchX, touchY))
-                    previousX = touchX
-                    previousY = touchY
-                }
-            }
-            MotionEvent.ACTION_UP -> {
-                currentStroke?.path?.lineTo(touchX, touchY)
-                currentStroke?.points?.add(PointF(touchX, touchY))
-
-                // Palm Rejection: Accidental tap check
-                val pointCount = currentStroke?.points?.size ?: 0
-                if (pointCount > 2) {
-                    currentStroke?.let { StrokeManager.addStroke(it) }
-                }
-
-                currentStroke = null
-            }
-            else -> return false
-        }
-
+        // Phase 4: Note Tool Logic
         if (isNoteTool || currentNotes.isNotEmpty()) {
-            if (event.action == MotionEvent.ACTION_UP) {
-                // 1. Check if we tapped an EXISTING note (allow opening notes even with Hand tool)
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
                 val iconRadius = 40f
                 var tappedNote: StudyNote? = null
                 for (note in currentNotes) {
@@ -193,19 +139,87 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                         break
                     }
                 }
-
                 if (tappedNote != null) {
                     onNoteInteraction?.invoke(touchX, touchY, tappedNote)
                     return true
-                }
-                // 2. If no existing note was tapped, and Note tool is active, create a new one
-                else if (isNoteTool) {
+                } else if (isNoteTool) {
                     onNoteInteraction?.invoke(touchX, touchY, null)
                     return true
                 }
             }
-            if (isNoteTool) return true // Consume touch so it doesn't pan the page
+            if (isNoteTool) return true
         }
+
+        // Phase 3: Object Eraser
+        if (isEraser) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    parent.requestDisallowInterceptTouchEvent(true) // Lock scrolling while erasing
+                    val didErase = StrokeManager.eraseStrokesAt(touchX, touchY, pageIndex, 40f)
+                    if (didErase) invalidate()
+                }
+            }
+            return true
+        }
+
+        // Standard Drawing Logic
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                // Lock the parent so the screen doesn't jiggle while writing
+                parent.requestDisallowInterceptTouchEvent(true)
+
+                currentPaint = createPaint()
+                currentStroke = Stroke(
+                    pageIndex,
+                    mutableListOf(),
+                    currentDrawColor,
+                    currentStrokeWidth,
+                    false,
+                    isHighlighter,
+                    this.width.toFloat(),
+                    this.height.toFloat()
+                )
+                currentStroke?.path?.moveTo(touchX, touchY)
+                currentStroke?.points?.add(PointF(touchX, touchY))
+                previousX = touchX
+                previousY = touchY
+            }
+
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // A second finger touched the screen mid-stroke! Abort the stroke and start zooming.
+                currentStroke = null
+                invalidate()
+                parent.requestDisallowInterceptTouchEvent(false)
+                return false
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val dx = Math.abs(touchX - previousX)
+                val dy = Math.abs(touchY - previousY)
+                if (dx >= touchTolerance || dy >= touchTolerance) {
+                    val midX = (previousX + touchX) / 2
+                    val midY = (previousY + touchY) / 2
+                    currentStroke?.path?.quadTo(previousX, previousY, midX, midY)
+                    currentStroke?.points?.add(PointF(touchX, touchY))
+                    previousX = touchX
+                    previousY = touchY
+                }
+            }
+
+            MotionEvent.ACTION_UP -> {
+                currentStroke?.path?.lineTo(touchX, touchY)
+                currentStroke?.points?.add(PointF(touchX, touchY))
+
+                val pointCount = currentStroke?.points?.size ?: 0
+                if (pointCount > 2) {
+                    currentStroke?.let { StrokeManager.addStroke(it) }
+                }
+                currentStroke = null
+            }
+
+            else -> return false
+        }
+
         invalidate()
         return true
     }
