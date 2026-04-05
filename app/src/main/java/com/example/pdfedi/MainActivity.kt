@@ -25,7 +25,7 @@ import com.example.pdfedi.database.StudyNote
 
 class MainActivity : AppCompatActivity() {
 
-    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER, NOTE }
+    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER, NOTE, TEXT_HIGHLIGHTER }
 
     // === UI Variables ===
     private lateinit var btnOpenPdf: ImageButton
@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnHighlighter: ImageButton
     private lateinit var btnEraser: ImageButton
     private lateinit var btnNote: Button
+    private lateinit var btnTextHighlighter: Button
 
     // Settings
     private lateinit var btnColorRed: Button
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         btnHighlighter = findViewById(R.id.btnHighlighter)
         btnEraser = findViewById(R.id.btnEraser)
         btnNote = findViewById(R.id.btnNote)
+        btnTextHighlighter = findViewById(R.id.btnTextHighlighter)
 
         btnColorRed = findViewById(R.id.btnColorRed)
         btnColorGreen = findViewById(R.id.btnColorGreen)
@@ -127,6 +129,7 @@ class MainActivity : AppCompatActivity() {
         btnHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.HIGHLIGHTER) }
         btnEraser.setOnClickListener { viewModel.selectTool(ActiveTool.ERASER) }
         btnNote.setOnClickListener { viewModel.selectTool(ActiveTool.NOTE) }
+        btnTextHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.TEXT_HIGHLIGHTER) }
 
         btnColorRed.setOnClickListener { viewModel.setColor(Color.parseColor("#F44336")) }
         btnColorGreen.setOnClickListener { viewModel.setColor(Color.parseColor("#4CAF50")) }
@@ -223,6 +226,7 @@ class MainActivity : AppCompatActivity() {
         btnHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
         btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
+        btnTextHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#B0BEC5"))
 
         // Show/Hide the Contextual Settings Panel
         val settingsPanel = findViewById<View>(R.id.settingsPanelCard)
@@ -238,6 +242,7 @@ class MainActivity : AppCompatActivity() {
             ActiveTool.HIGHLIGHTER -> btnHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.ERASER -> btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.NOTE -> btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+            ActiveTool.TEXT_HIGHLIGHTER -> btnTextHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
         }
     }
 
@@ -252,6 +257,7 @@ class MainActivity : AppCompatActivity() {
             16f -> btnSizeThick.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#212121"))
         }
     }
+
     private fun displayPdf() {
         viewModel.cachedFile?.let { file ->
             try {
@@ -259,6 +265,7 @@ class MainActivity : AppCompatActivity() {
                 val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                 pdfRenderer = PdfRenderer(fileDescriptor)
                 val adapter = PdfPageAdapter(pdfRenderer!!, pdfRenderer!!.pageCount)
+                adapter.pdfFile = viewModel.cachedFile
 
                 adapter.currentState = viewModel.uiState.value
                 pdfRecyclerView.adapter = adapter

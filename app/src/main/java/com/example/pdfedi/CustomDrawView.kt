@@ -19,28 +19,34 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     var isEraser = false
     var isHighlighter = false
 
-    // Add this property at the top of CustomDrawView.kt
+    // Sticky Note Properties
     var currentNotes: List<StudyNote> = emptyList()
     var onNoteInteraction: ((x: Float, y: Float, clickedNote: StudyNote?) -> Unit)? = null
     var isNoteTool = false
 
+    // NEW: Text Highlighter Properties
+    var isTextHighlighter = false
+    var pageTextLines: List<RectF> = emptyList()
+    private var startTouchX = 0f
+    private var startTouchY = 0f
+    private var currentSelectionRects = mutableListOf<RectF>()
+
     private var currentStroke: Stroke? = null
     private var currentPaint = createPaint()
 
-    // NEW: Variables for Bezier Curve Smoothing
+    // Variables for Bezier Curve Smoothing
     private var previousX = 0f
     private var previousY = 0f
     private val touchTolerance = 2f
 
     init {
-        // Highlighters with BlendModes require Software Layer on some Android versions to work correctly on top of Bitmaps
         setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
     private fun createPaint(
         color: Int = currentDrawColor,
         width: Float = currentStrokeWidth,
-        highlighter: Boolean = isHighlighter
+        highlighter: Boolean = isHighlighter || isTextHighlighter
     ): Paint {
         val paint = Paint().apply {
             this.color = color
@@ -51,18 +57,18 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             isAntiAlias = true
         }
 
-        // NEW: True Highlighting Logic
         if (highlighter) {
-            // Make the color semi-transparent
             paint.color = ColorUtils.setAlphaComponent(color, 100)
-
-            // Multiply Blend Mode ensures text beneath stays black
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 paint.blendMode = BlendMode.MULTIPLY
             } else {
                 paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
             }
-            paint.strokeWidth = width * 2.5f
+                if (isTextHighlighter || paint.style == Paint.Style.FILL) {
+                paint.style = Paint.Style.FILL
+            } else {
+                paint.strokeWidth = width * 2.5f
+            }
         }
         return paint
     }
@@ -70,20 +76,38 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-
+        // Draw Saved Strokes and Highlights
         val myStrokes = StrokeManager.globalStrokes.filter { it.pageIndex == pageIndex }
         for (stroke in myStrokes) {
             val paint = createPaint(stroke.color, stroke.width, stroke.isHighlighter)
-            canvas.drawPath(stroke.path, paint)
+            if (stroke.isTextHighlight && stroke.rects != null) {
+                paint.style = Paint.Style.FILL
+                for (rect in stroke.rects) {
+                    canvas.drawRect(rect, paint)
+                }
+            } else {
+                canvas.drawPath(stroke.path, paint)
+            }
         }
 
+        // Draw Freehand Active Stroke
         currentStroke?.let {
             canvas.drawPath(it.path, currentPaint)
         }
 
+        // Draw Active Text Snapping Selection
+        if (isTextHighlighter && currentSelectionRects.isNotEmpty()) {
+            val paint = createPaint(currentDrawColor, currentStrokeWidth, true)
+            paint.style = Paint.Style.FILL
+            for (rect in currentSelectionRects) {
+                canvas.drawRect(rect, paint)
+            }
+        }
+
+        // Draw Sticky Notes
         val iconSize = 60f
         val paintNote = Paint().apply {
-            color = Color.parseColor("#FFEB3B") // Yellow sticky color
+            color = Color.parseColor("#FFEB3B")
             style = Paint.Style.FILL
             setShadowLayer(4f, 2f, 2f, Color.parseColor("#40000000"))
         }
@@ -108,25 +132,22 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (pageIndex == -1) return false
 
-        // SMART TOUCH: Is the user using a dedicated Stylus/Apple Pencil/S-Pen?
         val isStylus = event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
 
-        // SMART TOUCH: If 2 or more fingers are on screen, ABORT drawing instantly.
         if (event.pointerCount > 1) {
             currentStroke = null
+            currentSelectionRects.clear()
             invalidate()
-            // Tell the parent (ZoomableRecyclerView) to take over for scrolling/zooming
             parent.requestDisallowInterceptTouchEvent(false)
             return false
         }
 
-        // If drawing is disabled AND we aren't using a stylus, don't do anything.
-        if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraser) return false
+        if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraser && !isTextHighlighter) return false
 
         val touchX = event.x
         val touchY = event.y
 
-        // Phase 4: Note Tool Logic
+        // Note Tool Logic
         if (isNoteTool || currentNotes.isNotEmpty()) {
             if (event.actionMasked == MotionEvent.ACTION_UP) {
                 val iconRadius = 40f
@@ -150,11 +171,11 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             if (isNoteTool) return true
         }
 
-        // Phase 3: Object Eraser
+        // Object Eraser Logic
         if (isEraser) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    parent.requestDisallowInterceptTouchEvent(true) // Lock scrolling while erasing
+                    parent.requestDisallowInterceptTouchEvent(true)
                     val didErase = StrokeManager.eraseStrokesAt(touchX, touchY, pageIndex, 40f)
                     if (didErase) invalidate()
                 }
@@ -162,12 +183,61 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return true
         }
 
-        // Standard Drawing Logic
+        // NEW: Text Highlighter Logic
+        if (isTextHighlighter) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    parent.requestDisallowInterceptTouchEvent(true)
+                    startTouchX = touchX
+                    startTouchY = touchY
+                    currentSelectionRects.clear()
+                }
+                MotionEvent.ACTION_MOVE -> {
+
+                    val padding = 25f
+
+                    val left = Math.min(startTouchX, touchX) - padding
+                    val right = Math.max(startTouchX, touchX) + padding
+                    val top = Math.min(startTouchY, touchY) - padding
+                    val bottom = Math.max(startTouchY, touchY) + padding
+                    val selectionBox = RectF(left, top, right, bottom)
+
+                    currentSelectionRects.clear()
+                    for (line in pageTextLines) {
+                        if (RectF.intersects(selectionBox, line)) {
+                            currentSelectionRects.add(line)
+                        }
+                    }
+                    invalidate()
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (currentSelectionRects.isNotEmpty()) {
+                        val newStroke = Stroke(
+                            pageIndex = pageIndex,
+                            points = mutableListOf(),
+                            color = currentDrawColor,
+                            width = currentStrokeWidth,
+                            isEraser = false,
+                            isHighlighter = true,
+                            canvasWidth = width.toFloat(),
+                            canvasHeight = height.toFloat(),
+                            path = Path(),
+                            rects = currentSelectionRects.toList(),
+                            isTextHighlight = true
+                        )
+                        StrokeManager.addStroke(newStroke)
+                        currentSelectionRects.clear()
+                    }
+                    invalidate()
+                }
+            }
+            return true
+        }
+
+        // Standard Freehand Drawing Logic
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                // Lock the parent so the screen doesn't jiggle while writing
                 parent.requestDisallowInterceptTouchEvent(true)
-
                 currentPaint = createPaint()
                 currentStroke = Stroke(
                     pageIndex,
@@ -186,7 +256,6 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
-                // A second finger touched the screen mid-stroke! Abort the stroke and start zooming.
                 currentStroke = null
                 invalidate()
                 parent.requestDisallowInterceptTouchEvent(false)
@@ -216,7 +285,6 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                 }
                 currentStroke = null
             }
-
             else -> return false
         }
 

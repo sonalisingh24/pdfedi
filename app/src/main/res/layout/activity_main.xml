@@ -100,6 +100,9 @@
             <ImageButton android:id="@+id/btnHand" android:layout_width="48dp" android:layout_height="48dp" android:backgroundTint="#4CAF50" android:src="@drawable/ic_hand" android:tint="@color/white" />
             <ImageButton android:id="@+id/btnMarker" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_marker" android:tint="@color/white" />
             <ImageButton android:id="@+id/btnHighlighter" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_highlighter" android:tint="@color/white" />
+
+            <Button android:id="@+id/btnTextHighlighter" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginStart="8dp" android:text="Text HL" android:textSize="12sp" android:backgroundTint="#B0BEC5" android:textColor="@color/white" app:cornerRadius="24dp"/>
+
             <ImageButton android:id="@+id/btnEraser" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:backgroundTint="#B0BEC5" android:src="@drawable/ic_eraser" android:tint="@color/white" />
             <Button android:id="@+id/btnNote" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginStart="8dp" android:text="Note" android:textSize="12sp" android:backgroundTint="#B0BEC5" android:textColor="@color/white" app:cornerRadius="24dp"/>
         </LinearLayout>

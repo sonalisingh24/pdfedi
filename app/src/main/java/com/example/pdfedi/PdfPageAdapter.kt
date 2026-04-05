@@ -11,31 +11,33 @@ import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 
 class PdfPageAdapter(
     private val pdfRenderer: PdfRenderer,
     private val pageCount: Int
 ) : RecyclerView.Adapter<PdfPageAdapter.PageViewHolder>() {
 
+    // NEW: File reference needed to extract text via PDFBox
+    var pdfFile: File? = null
+    private val textBoundsCache = mutableMapOf<Int, List<RectF>>()
+
     var currentState: EditorState = EditorState()
         set(value) {
             val modeChanged = field.readingMode != value.readingMode
             field = value
             if (modeChanged) {
-                clearCache() // If Sepia/Dark mode is toggled, invalidate the cached images
+                clearCache()
             }
         }
 
     private val renderMutex = Mutex()
 
-    // NEW Phase 5: RAM Cache for Smooth Scrolling
-    // Use 1/8th of the available device memory for this memory cache.
     private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
     private val cacheSize = maxMemory / 8
 
     private val memoryCache = object : LruCache<Int, Bitmap>(cacheSize) {
         override fun sizeOf(key: Int, bitmap: Bitmap): Int {
-            // The cache size will be measured in kilobytes rather than number of items.
             return bitmap.byteCount / 1024
         }
     }
@@ -59,37 +61,50 @@ class PdfPageAdapter(
     override fun getItemCount(): Int = pageCount
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // Pass drawing state to the DrawView
+        // Pass tool states to DrawView
         holder.drawView.isDrawingEnabled = currentState.isDrawingMode
         holder.drawView.pageIndex = position
         holder.drawView.currentDrawColor = currentState.strokeColor
         holder.drawView.currentStrokeWidth = currentState.strokeWidth
         holder.drawView.isEraser = currentState.activeTool == MainActivity.ActiveTool.ERASER
-        holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
 
-        // Pass Notes configuration (Phase 4)
+        // Pass highlighting state. Assume TEXT_HIGHLIGHTER is added to ActiveTool enum
+        holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
+        holder.drawView.isTextHighlighter = currentState.activeTool == MainActivity.ActiveTool.TEXT_HIGHLIGHTER
+
         holder.drawView.isNoteTool = currentState.activeTool == MainActivity.ActiveTool.NOTE
         holder.drawView.currentNotes = currentState.studyNotes.filter { it.pageIndex == position }
 
-        // CACHE LOGIC: Check if this page is already built in memory
+        // Setup Text Bounds Cache
+        if (textBoundsCache.containsKey(position)) {
+            holder.drawView.pageTextLines = textBoundsCache[position] ?: emptyList()
+        } else {
+            holder.drawView.pageTextLines = emptyList()
+        }
+
         val cachedBitmap = memoryCache.get(position)
         if (cachedBitmap != null) {
             holder.pageImageView.setImageBitmap(cachedBitmap)
-            holder.drawView.invalidate() // Force notes/drawings to appear on top
+            holder.drawView.invalidate()
             return
         }
 
-        // If not cached, clear view and render it
         holder.pageImageView.setImageBitmap(null)
         holder.renderJob?.cancel()
 
         holder.renderJob = CoroutineScope(Dispatchers.IO).launch {
             var finalBitmap: Bitmap? = null
 
+            // 1. Extract Text Bounds asynchronously
+            if (!textBoundsCache.containsKey(position) && pdfFile != null) {
+                val bounds = PdfTextExtractor.extractTextLines(pdfFile!!, position, 2.5f)
+                textBoundsCache[position] = bounds
+            }
+
+            // 2. Render Bitmap
             renderMutex.withLock {
                 try {
                     val page = pdfRenderer.openPage(position)
-
                     val width = (page.width * 2.5).toInt()
                     val height = (page.height * 2.5).toInt()
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -121,16 +136,19 @@ class PdfPageAdapter(
                         finalBitmap = bitmap
                     }
 
-                    // Add the finished rendering to our RAM Cache
                     finalBitmap?.let { memoryCache.put(position, it) }
 
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
+
+            // 3. Update UI on Main Thread
             withContext(Dispatchers.Main) {
                 finalBitmap?.let {
                     holder.pageImageView.setImageBitmap(it)
+                    // Assign the newly loaded bounds to the view
+                    holder.drawView.pageTextLines = textBoundsCache[position] ?: emptyList()
                     holder.drawView.invalidate()
                 }
             }

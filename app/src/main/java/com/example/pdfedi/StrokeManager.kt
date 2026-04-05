@@ -2,6 +2,7 @@ package com.example.pdfedi
 
 import android.graphics.Path
 import android.graphics.PointF
+import android.graphics.RectF
 
 data class Stroke(
     val pageIndex: Int,
@@ -12,7 +13,9 @@ data class Stroke(
     val isHighlighter: Boolean,
     val canvasWidth: Float,
     val canvasHeight: Float,
-    val path: Path = Path()
+    val path: Path = Path(),
+    val rects: List<RectF>? = null,
+    val isTextHighlight: Boolean = false
 )
 
 object StrokeManager {
