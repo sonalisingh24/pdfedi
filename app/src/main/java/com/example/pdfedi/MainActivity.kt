@@ -1,13 +1,12 @@
 package com.example.pdfedi
 
 import android.graphics.Color
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -24,7 +23,7 @@ import com.example.pdfedi.database.StudyNote
 
 class MainActivity : AppCompatActivity() {
 
-    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER, NOTE, TEXT_HIGHLIGHTER }
+    enum class ActiveTool { HAND, MARKER, HIGHLIGHTER, ERASER_OBJECT, ERASER_PIXEL, NOTE, TEXT_HIGHLIGHTER }
 
     // === UI Variables ===
     private lateinit var btnOpenPdf: ImageButton
@@ -66,7 +65,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-
         initViews()
         setupClickListeners()
         observeViewModel()
@@ -91,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         btnNote = findViewById(R.id.btnNote)
         btnTextHighlighter = findViewById(R.id.btnTextHighlighter)
 
+        // FIXED: Added missing initializations for colors and sizes
         btnColorRed = findViewById(R.id.btnColorRed)
         btnColorGreen = findViewById(R.id.btnColorGreen)
         btnColorBlue = findViewById(R.id.btnColorBlue)
@@ -122,9 +121,19 @@ class MainActivity : AppCompatActivity() {
 
         btnHand.setOnClickListener { viewModel.selectTool(ActiveTool.HAND) }
         btnMarker.setOnClickListener { viewModel.selectTool(ActiveTool.MARKER) }
-        btnEraser.setOnClickListener { viewModel.selectTool(ActiveTool.ERASER) }
         btnNote.setOnClickListener { viewModel.selectTool(ActiveTool.NOTE) }
         btnTextHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.TEXT_HIGHLIGHTER) }
+
+        // --- ERASER LISTENERS ---
+        btnEraser.setOnClickListener {
+            // Default to Object Eraser when tapped
+            viewModel.selectTool(ActiveTool.ERASER_OBJECT)
+        }
+
+        btnEraser.setOnLongClickListener { view ->
+            showEraserMenu(view)
+            true
+        }
 
         btnColorRed.setOnClickListener { viewModel.setColor(Color.parseColor("#F44336")) }
         btnColorGreen.setOnClickListener { viewModel.setColor(Color.parseColor("#4CAF50")) }
@@ -181,7 +190,7 @@ class MainActivity : AppCompatActivity() {
                     if (state.saveSuccess) {
                         Toast.makeText(this@MainActivity, "PDF Saved Successfully!", Toast.LENGTH_SHORT).show()
 
-                        // NEW: Force the Recycler View to redraw the native annotations
+                        // Force the Recycler View to redraw the native annotations
                         (pdfRecyclerView.adapter as? PdfPageAdapter)?.clearCache()
                     } else {
                         Toast.makeText(this@MainActivity, "Failed to save PDF", Toast.LENGTH_SHORT).show()
@@ -213,7 +222,10 @@ class MainActivity : AppCompatActivity() {
                 drawView.isDrawingEnabled = state.isDrawingMode
                 drawView.currentDrawColor = state.strokeColor
                 drawView.currentStrokeWidth = state.strokeWidth
-                drawView.isEraser = state.activeTool == ActiveTool.ERASER
+
+                drawView.isEraserObject = state.activeTool == ActiveTool.ERASER_OBJECT
+                drawView.isEraserPixel = state.activeTool == ActiveTool.ERASER_PIXEL
+
                 drawView.isHighlighter = state.activeTool == ActiveTool.HIGHLIGHTER
                 drawView.isTextHighlighter = state.activeTool == ActiveTool.TEXT_HIGHLIGHTER
                 drawView.isNoteTool = state.activeTool == ActiveTool.NOTE
@@ -257,7 +269,7 @@ class MainActivity : AppCompatActivity() {
             ActiveTool.HAND -> btnHand.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.MARKER -> btnMarker.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.HIGHLIGHTER -> btnHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
-            ActiveTool.ERASER -> btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+            ActiveTool.ERASER_OBJECT, ActiveTool.ERASER_PIXEL -> btnEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.NOTE -> btnNote.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
             ActiveTool.TEXT_HIGHLIGHTER -> btnTextHighlighter.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50"))
         }
@@ -366,7 +378,24 @@ class MainActivity : AppCompatActivity() {
         builder.show()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    private fun showEraserMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Stroke Eraser (Deletes entire line)")
+        popup.menu.add(0, 2, 0, "Pixel Eraser (Deletes only what you touch)")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    viewModel.selectTool(ActiveTool.ERASER_OBJECT)
+                    true
+                }
+                2 -> {
+                    viewModel.selectTool(ActiveTool.ERASER_PIXEL)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
     }
 }

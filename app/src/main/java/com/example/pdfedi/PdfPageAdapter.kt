@@ -57,7 +57,8 @@ class PdfPageAdapter(
         holder.drawView.pageIndex = position
         holder.drawView.currentDrawColor = currentState.strokeColor
         holder.drawView.currentStrokeWidth = currentState.strokeWidth
-        holder.drawView.isEraser = currentState.activeTool == MainActivity.ActiveTool.ERASER
+        holder.drawView.isEraserObject = currentState.activeTool == MainActivity.ActiveTool.ERASER_OBJECT
+        holder.drawView.isEraserPixel = currentState.activeTool == MainActivity.ActiveTool.ERASER_PIXEL
         holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
         holder.drawView.isTextHighlighter = currentState.activeTool == MainActivity.ActiveTool.TEXT_HIGHLIGHTER
         holder.drawView.isNoteTool = currentState.activeTool == MainActivity.ActiveTool.NOTE
@@ -91,16 +92,20 @@ class PdfPageAdapter(
                         for (block in stText.blocks) {
                             if (block is com.artifex.mupdf.fitz.StructuredText.TextBlock) {
                                 for (line in block.lines) {
-                                    val bbox = line.bbox
-                                    val scale = 2.5f
-                                    val padding = 4f
+                                    // EXTRACTING INDIVIDUAL CHARACTERS INSTEAD OF LINES
+                                    for (char in line.chars) {
+                                        val quad = char.quad
+                                        val bbox = com.artifex.mupdf.fitz.Rect(quad)
+                                        val scale = 2.5f
+                                        val padding = 1f
 
-                                    textLines.add(RectF(
-                                        bbox.x0 * scale - padding,
-                                        bbox.y0 * scale - padding,
-                                        bbox.x1 * scale + padding,
-                                        bbox.y1 * scale + padding
-                                    ))
+                                        textLines.add(RectF(
+                                            bbox.x0 * scale - padding,
+                                            bbox.y0 * scale - padding,
+                                            bbox.x1 * scale + padding,
+                                            bbox.y1 * scale + padding
+                                        ))
+                                    }
                                 }
                             }
                         }
@@ -116,9 +121,9 @@ class PdfPageAdapter(
                     }
 
                     // Get precise dimensions for the Android Bitmap
-                    val bbox = page.bounds
-                    val width = ((bbox.x1 - bbox.x0) * 2.5f).toInt()
-                    val height = ((bbox.y1 - bbox.y0) * 2.5f).toInt()
+                    val pageBounds = page.bounds
+                    val width = ((pageBounds.x1 - pageBounds.x0) * 2.5f).toInt()
+                    val height = ((pageBounds.y1 - pageBounds.y0) * 2.5f).toInt()
 
                     val baseBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     baseBitmap.eraseColor(Color.WHITE)

@@ -22,10 +22,14 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(EditorState())
     val uiState: StateFlow<EditorState> = _uiState.asStateFlow()
 
-    // NEW: Expose the MuPDF Document instead of the raw File
+    // Expose the MuPDF Document instead of the raw File
     val mupdfDocument: Document? get() = repository.mupdfDocument
 
-    fun selectTool(tool: MainActivity.ActiveTool) { _uiState.update { it.copy(activeTool = tool) } }
+    // FIXED: Properly reference MainActivity.ActiveTool and update the UI State
+    fun selectTool(tool: MainActivity.ActiveTool) {
+        _uiState.update { it.copy(activeTool = tool) }
+    }
+
     fun setColor(color: Int) { _uiState.update { it.copy(strokeColor = color) } }
     fun setStrokeWidth(width: Float) { _uiState.update { it.copy(strokeWidth = width) } }
     fun setReadingMode(mode: ReadingMode) { _uiState.update { it.copy(readingMode = mode) } }
@@ -42,7 +46,8 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
             launch {
                 noteDao.getNotesForDocument(uriString).collect { notes ->
                     _uiState.update { it.copy(studyNotes = notes) }
-                } }
+                }
+            }
 
             val doc = repository.createWorkingCopy(uri)
             if (doc != null) {
@@ -75,7 +80,6 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        // CRITICAL: Prevent native C++ memory leaks!
         repository.mupdfDocument?.destroy()
     }
 }

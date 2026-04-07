@@ -18,7 +18,11 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
     var currentDrawColor = Color.parseColor("#F44336")
     var currentStrokeWidth = 8f
-    var isEraser = false
+
+    // CHANGED: Separated object and pixel erasers
+    var isEraserObject = false
+    var isEraserPixel = false
+
     var isHighlighter = false
 
     // Sticky Note Properties
@@ -26,7 +30,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     var onNoteInteraction: ((x: Float, y: Float, clickedNote: StudyNote?) -> Unit)? = null
     var isNoteTool = false
 
-    // NEW: Text Highlighter Properties
+    // Text Highlighter Properties
     var isTextHighlighter = false
     var pageTextLines: List<RectF> = emptyList()
     private var startTouchX = 0f
@@ -43,6 +47,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     private val textSelectionColor = Color.parseColor("#4D33B5E5")
 
     init {
+        // Essential for BlendMode.CLEAR to work properly without blacking out the screen
         setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
@@ -67,7 +72,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             } else {
                 paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
             }
-                if (isTextHighlighter || paint.style == Paint.Style.FILL) {
+            if (isTextHighlighter || paint.style == Paint.Style.FILL) {
                 paint.style = Paint.Style.FILL
             } else {
                 paint.strokeWidth = width * 2.5f
@@ -75,7 +80,6 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         }
         return paint
     }
-
 
     @SuppressLint("DrawAllocation")
     override fun onDraw(canvas: Canvas) {
@@ -85,6 +89,16 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         val myStrokes = StrokeManager.globalStrokes.filter { it.pageIndex == pageIndex }
         for (stroke in myStrokes) {
             val paint = createPaint(stroke.color, stroke.width, stroke.isHighlighter)
+
+            // CHANGED: If this stroke is a pixel eraser stroke, make it clear the canvas
+            if (stroke.isEraser) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    paint.blendMode = BlendMode.CLEAR
+                } else {
+                    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                }
+            }
+
             if (stroke.isTextHighlight && stroke.rects != null) {
                 paint.style = Paint.Style.FILL
                 for (rect in stroke.rects) {
@@ -149,7 +163,8 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return false
         }
 
-        if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraser && !isTextHighlighter) return false
+        // CHANGED: Updated interception rules to allow both eraser types
+        if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraserObject && !isEraserPixel && !isTextHighlighter) return false
 
         val touchX = event.x
         val touchY = event.y
@@ -179,7 +194,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         }
 
         // Object Eraser Logic
-        if (isEraser) {
+        if (isEraserObject) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                     parent.requestDisallowInterceptTouchEvent(true)
@@ -190,10 +205,9 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return true
         }
 
-        // NEW: Text Highlighter Logic
+        // Text Highlighter Logic
         if (isTextHighlighter) {
             when (event.actionMasked) {
-
                 MotionEvent.ACTION_DOWN -> {
                     parent.requestDisallowInterceptTouchEvent(true)
                     startTouchX = touchX
@@ -202,19 +216,23 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    val padding = 25f
+                    val padding = 5f
                     val left = Math.min(startTouchX, touchX) - padding
                     val right = Math.max(startTouchX, touchX) + padding
                     val top = Math.min(startTouchY, touchY) - padding
                     val bottom = Math.max(startTouchY, touchY) + padding
                     val selectionBox = RectF(left, top, right, bottom)
 
-                    currentSelectionRects.clear()
-                    for (line in pageTextLines) {
-                        if (RectF.intersects(selectionBox, line)) {
-                            currentSelectionRects.add(line)
+                    val intersectedChars = mutableListOf<RectF>()
+                    for (charRect in pageTextLines) {
+                        if (RectF.intersects(selectionBox, charRect)) {
+                            intersectedChars.add(charRect)
                         }
                     }
+
+                    currentSelectionRects.clear()
+                    currentSelectionRects.addAll(mergeRects(intersectedChars))
+
                     invalidate()
                 }
 
@@ -225,18 +243,27 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return true
         }
 
-        // Standard Freehand Drawing Logic
+        // Standard Freehand Drawing AND Pixel Eraser Logic
         when (event.actionMasked) {
-
             MotionEvent.ACTION_DOWN -> {
                 parent.requestDisallowInterceptTouchEvent(true)
                 currentPaint = createPaint()
+
+                // CHANGED: If pixel eraser is active, change the paint to clear mode
+                if (isEraserPixel) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        currentPaint.blendMode = BlendMode.CLEAR
+                    } else {
+                        currentPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                    }
+                }
+
                 currentStroke = Stroke(
                     pageIndex,
                     mutableListOf(),
                     currentDrawColor,
                     currentStrokeWidth,
-                    false,
+                    isEraserPixel, // This flags the saved stroke as an eraser stroke
                     isHighlighter,
                     this.width.toFloat(),
                     this.height.toFloat()
@@ -304,7 +331,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                 isTextHighlight = true
             )
             StrokeManager.addStroke(newStroke)
-            currentSelectionRects.clear() // Clear the blue selection box
+            currentSelectionRects.clear()
             invalidate()
         }
     }
@@ -312,5 +339,41 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     fun clearSelection() {
         currentSelectionRects.clear()
         invalidate()
+    }
+
+    private fun mergeRects(rects: List<RectF>): List<RectF> {
+        if (rects.isEmpty()) return emptyList()
+
+        val sortedRects = rects.sortedWith { r1, r2 ->
+            val yDiff = r1.centerY() - r2.centerY()
+            if (Math.abs(yDiff) > 10f) {
+                yDiff.toInt()
+            } else {
+                (r1.left - r2.left).toInt()
+            }
+        }
+
+        val mergedList = mutableListOf<RectF>()
+        var currentMergedRect = RectF(sortedRects[0])
+
+        for (i in 1 until sortedRects.size) {
+            val nextRect = sortedRects[i]
+
+            val horizontalGapTolerance = 25f
+            val isSameLine = Math.abs(currentMergedRect.centerY() - nextRect.centerY()) <= 10f
+            val isAdjacent = nextRect.left <= (currentMergedRect.right + horizontalGapTolerance)
+
+            if (isSameLine && isAdjacent) {
+                currentMergedRect.right = Math.max(currentMergedRect.right, nextRect.right)
+                currentMergedRect.top = Math.min(currentMergedRect.top, nextRect.top)
+                currentMergedRect.bottom = Math.max(currentMergedRect.bottom, nextRect.bottom)
+            } else {
+                mergedList.add(currentMergedRect)
+                currentMergedRect = RectF(nextRect)
+            }
+        }
+        mergedList.add(currentMergedRect)
+
+        return mergedList
     }
 }
