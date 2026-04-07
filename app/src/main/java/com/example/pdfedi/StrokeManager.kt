@@ -45,7 +45,6 @@ object StrokeManager {
         return null
     }
 
-    // NEW: Vector Object Eraser Logic
     fun eraseStrokesAt(x: Float, y: Float, pageIndex: Int, radius: Float): Boolean {
         var strokeErased = false
         val iterator = globalStrokes.iterator()
@@ -54,21 +53,45 @@ object StrokeManager {
             val stroke = iterator.next()
             if (stroke.pageIndex != pageIndex) continue
 
-            // Check if the touch point is close to any point in the stroke
+            var hit = false
+
+            // 1. Check if we hit standard freehand strokes (using points)
             for (point in stroke.points) {
                 val dx = point.x - x
                 val dy = point.y - y
                 val distanceSquared = dx * dx + dy * dy
 
                 if (distanceSquared <= radius * radius) {
-                    // We hit a stroke! Remove it entirely.
-                    iterator.remove()
-
-                    // Add to redo stack so the user can 'Undo' their erasure
-                    redoStrokes.add(stroke)
-                    strokeErased = true
+                    hit = true
                     break
                 }
+            }
+
+            // 2. Check if we hit text highlights (using rects)
+            if (!hit && stroke.isTextHighlight && stroke.rects != null) {
+                for (rect in stroke.rects) {
+                    // We artificially expand the rectangle slightly by the eraser radius
+                    // so it's easier to tap and erase
+                    val expandedRect = RectF(
+                        rect.left - radius,
+                        rect.top - radius,
+                        rect.right + radius,
+                        rect.bottom + radius
+                    )
+
+                    if (expandedRect.contains(x, y)) {
+                        hit = true
+                        break
+                    }
+                }
+            }
+
+            // If we hit either a point OR a rect, erase the stroke
+            if (hit) {
+                iterator.remove()
+                // Add to redo stack so the user can 'Undo' their erasure
+                redoStrokes.add(stroke)
+                strokeErased = true
             }
         }
         return strokeErased

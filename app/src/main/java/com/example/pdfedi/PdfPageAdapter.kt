@@ -1,45 +1,37 @@
 package com.example.pdfedi
 
 import android.graphics.*
-import android.graphics.pdf.PdfRenderer
 import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
+import com.artifex.mupdf.fitz.Document
+import com.artifex.mupdf.fitz.Matrix
+import com.artifex.mupdf.fitz.android.AndroidDrawDevice
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.File
 
 class PdfPageAdapter(
-    private val pdfRenderer: PdfRenderer,
+    private val document: Document,
     private val pageCount: Int
 ) : RecyclerView.Adapter<PdfPageAdapter.PageViewHolder>() {
 
-    // NEW: File reference needed to extract text via PDFBox
-    var pdfFile: File? = null
     private val textBoundsCache = mutableMapOf<Int, List<RectF>>()
 
     var currentState: EditorState = EditorState()
         set(value) {
             val modeChanged = field.readingMode != value.readingMode
             field = value
-            if (modeChanged) {
-                clearCache()
-            }
+            if (modeChanged) clearCache()
         }
 
     private val renderMutex = Mutex()
-
     private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-    private val cacheSize = maxMemory / 8
-
-    private val memoryCache = object : LruCache<Int, Bitmap>(cacheSize) {
-        override fun sizeOf(key: Int, bitmap: Bitmap): Int {
-            return bitmap.byteCount / 1024
-        }
+    private val memoryCache = object : LruCache<Int, Bitmap>(maxMemory / 8) {
+        override fun sizeOf(key: Int, bitmap: Bitmap): Int = bitmap.byteCount / 1024
     }
 
     fun clearCache() {
@@ -61,26 +53,17 @@ class PdfPageAdapter(
     override fun getItemCount(): Int = pageCount
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // Pass tool states to DrawView
         holder.drawView.isDrawingEnabled = currentState.isDrawingMode
         holder.drawView.pageIndex = position
         holder.drawView.currentDrawColor = currentState.strokeColor
         holder.drawView.currentStrokeWidth = currentState.strokeWidth
         holder.drawView.isEraser = currentState.activeTool == MainActivity.ActiveTool.ERASER
-
-        // Pass highlighting state. Assume TEXT_HIGHLIGHTER is added to ActiveTool enum
         holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
         holder.drawView.isTextHighlighter = currentState.activeTool == MainActivity.ActiveTool.TEXT_HIGHLIGHTER
-
         holder.drawView.isNoteTool = currentState.activeTool == MainActivity.ActiveTool.NOTE
         holder.drawView.currentNotes = currentState.studyNotes.filter { it.pageIndex == position }
 
-        // Setup Text Bounds Cache
-        if (textBoundsCache.containsKey(position)) {
-            holder.drawView.pageTextLines = textBoundsCache[position] ?: emptyList()
-        } else {
-            holder.drawView.pageTextLines = emptyList()
-        }
+        holder.drawView.pageTextLines = textBoundsCache[position] ?: emptyList()
 
         val cachedBitmap = memoryCache.get(position)
         if (cachedBitmap != null) {
@@ -95,59 +78,95 @@ class PdfPageAdapter(
         holder.renderJob = CoroutineScope(Dispatchers.IO).launch {
             var finalBitmap: Bitmap? = null
 
-            // 1. Extract Text Bounds asynchronously
-            if (!textBoundsCache.containsKey(position) && pdfFile != null) {
-                val bounds = PdfTextExtractor.extractTextLines(pdfFile!!, position, 2.5f)
-                textBoundsCache[position] = bounds
-            }
-
-            // 2. Render Bitmap
             renderMutex.withLock {
                 try {
-                    val page = pdfRenderer.openPage(position)
-                    val width = (page.width * 2.5).toInt()
-                    val height = (page.height * 2.5).toInt()
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    // Open the MuPDF page
+                    val page = document.loadPage(position)
+
+                    if (!textBoundsCache.containsKey(position)) {
+                        val textLines = mutableListOf<RectF>()
+
+                        val stText = page.toStructuredText()
+
+                        for (block in stText.blocks) {
+                            if (block is com.artifex.mupdf.fitz.StructuredText.TextBlock) {
+                                for (line in block.lines) {
+                                    val bbox = line.bbox
+                                    val scale = 2.5f
+                                    val padding = 4f
+
+                                    textLines.add(RectF(
+                                        bbox.x0 * scale - padding,
+                                        bbox.y0 * scale - padding,
+                                        bbox.x1 * scale + padding,
+                                        bbox.y1 * scale + padding
+                                    ))
+                                }
+                            }
+                        }
+                        textBoundsCache[position] = textLines
+                    }
+
+                    val ctm = Matrix(2.5f, 0f, 0f, 2.5f, 0f, 0f)
 
                     val bgColor = when (currentState.readingMode) {
                         ReadingMode.SEPIA -> Color.parseColor("#F4ECD8")
                         ReadingMode.DARK -> Color.parseColor("#121212")
                         else -> Color.WHITE
                     }
-                    bitmap.eraseColor(bgColor)
 
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    page.close()
+                    // Get precise dimensions for the Android Bitmap
+                    val bbox = page.bounds
+                    val width = ((bbox.x1 - bbox.x0) * 2.5f).toInt()
+                    val height = ((bbox.y1 - bbox.y0) * 2.5f).toInt()
+
+                    val baseBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    baseBitmap.eraseColor(Color.WHITE)
+
+                    val dev = AndroidDrawDevice(baseBitmap)
+                    page.run(dev, ctm, null as com.artifex.mupdf.fitz.Cookie?)
+
 
                     if (currentState.readingMode == ReadingMode.DARK) {
-                        finalBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                        val canvas = Canvas(finalBitmap!!)
-                        val paint = Paint()
-
-                        val colorMatrix = ColorMatrix(floatArrayOf(
-                            -1f,  0f,  0f, 0f, 255f,
-                            0f, -1f,  0f, 0f, 255f,
-                            0f,  0f, -1f, 0f, 255f,
-                            0f,  0f,  0f, 1f,   0f
-                        ))
-                        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
-                        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+                        finalBitmap = Bitmap.createBitmap(baseBitmap.width, baseBitmap.height, Bitmap.Config.ARGB_8888)
+                        finalBitmap.eraseColor(bgColor)
+                        val canvas = Canvas(finalBitmap)
+                        val paint = Paint().apply {
+                            colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+                                -1f,  0f,  0f, 0f, 255f,
+                                0f, -1f,  0f, 0f, 255f,
+                                0f,  0f, -1f, 0f, 255f,
+                                0f,  0f,  0f, 1f,   0f
+                            )))
+                        }
+                        canvas.drawBitmap(baseBitmap, 0f, 0f, paint)
+                    } else if (currentState.readingMode == ReadingMode.SEPIA) {
+                        finalBitmap = Bitmap.createBitmap(baseBitmap.width, baseBitmap.height, Bitmap.Config.ARGB_8888)
+                        finalBitmap.eraseColor(bgColor)
+                        val canvas = Canvas(finalBitmap)
+                        val paint = Paint().apply {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                blendMode = BlendMode.MULTIPLY
+                            } else {
+                                @Suppress("DEPRECATION")
+                                xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+                            }
+                        }
+                        canvas.drawBitmap(baseBitmap, 0f, 0f, paint)
                     } else {
-                        finalBitmap = bitmap
+                        finalBitmap = baseBitmap
                     }
 
-                    finalBitmap?.let { memoryCache.put(position, it) }
+                    finalBitmap.let { memoryCache.put(position, it) }
 
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
 
-            // 3. Update UI on Main Thread
             withContext(Dispatchers.Main) {
                 finalBitmap?.let {
                     holder.pageImageView.setImageBitmap(it)
-                    // Assign the newly loaded bounds to the view
                     holder.drawView.pageTextLines = textBoundsCache[position] ?: emptyList()
                     holder.drawView.invalidate()
                 }

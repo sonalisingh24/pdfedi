@@ -1,12 +1,12 @@
 package com.example.pdfedi
 
 import android.content.Context
-import android.graphics.Color
 import android.net.Uri
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
-import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
-import com.tom_roush.pdfbox.text.PDFTextStripper
+import com.artifex.mupdf.fitz.Document
+import com.artifex.mupdf.fitz.PDFAnnotation
+import com.artifex.mupdf.fitz.PDFPage
+import com.artifex.mupdf.fitz.Rect
+import com.artifex.mupdf.fitz.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -16,8 +16,9 @@ class PdfRepository(private val context: Context) {
 
     var cachedPdfFile: File? = null
     var originalUri: Uri? = null
+    var mupdfDocument: Document? = null
 
-    suspend fun createWorkingCopy(uri: Uri): File? = withContext(Dispatchers.IO) {
+    suspend fun createWorkingCopy(uri: Uri): Document? = withContext(Dispatchers.IO) {
         try {
             originalUri = uri
             val inputStream = context.contentResolver.openInputStream(uri)
@@ -26,82 +27,105 @@ class PdfRepository(private val context: Context) {
             inputStream?.copyTo(outputStream)
             inputStream?.close()
             outputStream.close()
+
             cachedPdfFile = tempFile
-            return@withContext tempFile
+            mupdfDocument = Document.openDocument(tempFile.absolutePath)
+            return@withContext mupdfDocument
         } catch (e: Exception) {
             e.printStackTrace()
             return@withContext null
         }
     }
 
-    // NEW Phase 5: Text Extraction and Search
+    // ====================================================
+    // PHASE 5: NATIVE SEARCH
+    // ====================================================
     suspend fun searchPdfForText(query: String): List<Int> = withContext(Dispatchers.IO) {
-        val matchingPages = mutableListOf<Int>()
-        if (cachedPdfFile == null) return@withContext matchingPages
+        val results = mutableListOf<Int>()
+        mupdfDocument?.let { doc ->
+            for (i in 0 until doc.countPages()) {
+                val page = doc.loadPage(i)
+                val textPage = page.toStructuredText()
 
-        try {
-            val document = PDDocument.load(cachedPdfFile)
-            val stripper = PDFTextStripper()
-
-            // Loop through pages. PDFBox pages are 1-indexed.
-            for (i in 1..document.numberOfPages) {
-                stripper.startPage = i
-                stripper.endPage = i
-                val textOnPage = stripper.getText(document)
-
-                if (textOnPage.contains(query, ignoreCase = true)) {
-                    matchingPages.add(i - 1) // Store as 0-indexed for the RecyclerView Adapter
+                // MuPDF makes searching incredibly easy
+                val hits = textPage.search(query)
+                if (hits != null && hits.isNotEmpty()) {
+                    results.add(i)
                 }
+
             }
-            document.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        return@withContext matchingPages
+        return@withContext results
     }
 
+    // ====================================================
+    // PHASE 5: BAKING NATIVE PDF ANNOTATIONS
+    // ====================================================
     suspend fun saveAnnotationsToPdf(strokes: List<Stroke>): Boolean = withContext(Dispatchers.IO) {
-        if (cachedPdfFile == null || originalUri == null) return@withContext false
         try {
-            val document = PDDocument.load(cachedPdfFile)
-            for (stroke in strokes) {
-                if (stroke.isEraser || stroke.points.isEmpty()) continue
+            val doc = mupdfDocument ?: return@withContext false
+            val scale = 2.5f // We must reverse your canvas scaling!
 
-                val page = document.getPage(stroke.pageIndex)
-                val contentStream = PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)
+            // Group the strokes so we only have to open each page once
+            val strokesByPage = strokes.groupBy { it.pageIndex }
 
-                if (stroke.isHighlighter) {
-                    val graphicsState = PDExtendedGraphicsState()
-                    graphicsState.strokingAlphaConstant = 0.4f
-                    contentStream.setGraphicsStateParameters(graphicsState)
+            for ((pageIndex, pageStrokes) in strokesByPage) {
+                // FIXED: Cast to PDFPage to allow annotation creation
+                val page = doc.loadPage(pageIndex) as PDFPage
+
+                for (stroke in pageStrokes) {
+                    val r = android.graphics.Color.red(stroke.color) / 255f
+                    val g = android.graphics.Color.green(stroke.color) / 255f
+                    val b = android.graphics.Color.blue(stroke.color) / 255f
+                    val colorArray = floatArrayOf(r, g, b)
+
+                    if (stroke.isTextHighlight && stroke.rects != null) {
+                        for (rect in stroke.rects) {
+                            // FIXED: Use PDFAnnotation.TYPE_HIGHLIGHT
+                            val annot = page.createAnnotation(PDFAnnotation.TYPE_HIGHLIGHT)
+
+                            val p = 4f
+                            val pdfRect = Rect(
+                                (rect.left + p) / scale,
+                                (rect.top + p) / scale,
+                                (rect.right - p) / scale,
+                                (rect.bottom - p) / scale
+                            )
+
+                            annot.setRect(pdfRect)
+                            annot.setColor(colorArray)
+                            annot.update()
+                        }
+                    } else {
+                        // FIXED: Use PDFAnnotation.TYPE_INK
+                        val annot = page.createAnnotation(PDFAnnotation.TYPE_INK)
+                        annot.setBorder(stroke.width / scale)
+                        annot.setColor(colorArray)
+
+                        val pdfPoints = stroke.points.map {
+                            Point(it.x / scale, it.y / scale)
+                        }.toTypedArray()
+
+                        annot.addInkList(pdfPoints)
+                        annot.update()
+                    }
                 }
+            }
 
-                contentStream.setStrokingColor(Color.red(stroke.color), Color.green(stroke.color), Color.blue(stroke.color))
+            val pdfDoc = doc as com.artifex.mupdf.fitz.PDFDocument
+            pdfDoc.save(cachedPdfFile!!.absolutePath, "incremental")
 
-                val pdfWidth = page.mediaBox.width
-                val pdfHeight = page.mediaBox.height
-                val scaleX = pdfWidth / stroke.canvasWidth
-                val scaleY = pdfHeight / stroke.canvasHeight
-
-                contentStream.setLineWidth(stroke.width * scaleX)
-
-                val start = stroke.points[0]
-                contentStream.moveTo(start.x * scaleX, pdfHeight - (start.y * scaleY))
-
-                for (i in 1 until stroke.points.size) {
-                    val pt = stroke.points[i]
-                    contentStream.lineTo(pt.x * scaleX, pdfHeight - (pt.y * scaleY))
+            originalUri?.let { uri ->
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    cachedPdfFile!!.inputStream().use { input ->
+                        input.copyTo(output)
+                    }
                 }
+            }
 
-                contentStream.stroke()
-                contentStream.close()
-            }
-            val outputStream = context.contentResolver.openOutputStream(originalUri!!, "wt")
-            if (outputStream != null) {
-                document.save(outputStream)
-                outputStream.close()
-            }
-            document.close()
+            // Clear our temporary UI strokes because they are now permanent in the PDF!
+            StrokeManager.globalStrokes.clear()
+
             return@withContext true
         } catch (e: Exception) {
             e.printStackTrace()

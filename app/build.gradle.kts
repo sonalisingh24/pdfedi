@@ -1,18 +1,17 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    // REQUIRED: KSP plugin matching your Kotlin version 2.0.21
-    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.example.pdfedi"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.pdfedi"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -38,7 +37,7 @@ android {
 }
 
 dependencies {
-    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("com.artifex.mupdf:fitz:1.23.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
 
@@ -51,7 +50,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    // REQUIRED: Room Database Dependencies for Phase 4 (Sticky Notes)
+    // Room Database Dependencies
     val room_version = "2.6.1"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")

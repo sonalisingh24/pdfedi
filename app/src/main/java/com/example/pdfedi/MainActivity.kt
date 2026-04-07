@@ -17,7 +17,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
@@ -54,9 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleImmersive: Button
 
     private lateinit var pdfRecyclerView: ZoomableRecyclerView
-    private var pdfRenderer: PdfRenderer? = null
 
-    // ViewModel Integration
     private val viewModel: PdfViewModel by viewModels()
 
     private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -69,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        PDFBoxResourceLoader.init(applicationContext)
 
         initViews()
         setupClickListeners()
@@ -126,7 +122,6 @@ class MainActivity : AppCompatActivity() {
 
         btnHand.setOnClickListener { viewModel.selectTool(ActiveTool.HAND) }
         btnMarker.setOnClickListener { viewModel.selectTool(ActiveTool.MARKER) }
-        btnHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.HIGHLIGHTER) }
         btnEraser.setOnClickListener { viewModel.selectTool(ActiveTool.ERASER) }
         btnNote.setOnClickListener { viewModel.selectTool(ActiveTool.NOTE) }
         btnTextHighlighter.setOnClickListener { viewModel.selectTool(ActiveTool.TEXT_HIGHLIGHTER) }
@@ -140,6 +135,26 @@ class MainActivity : AppCompatActivity() {
         btnSizeThick.setOnClickListener { viewModel.setStrokeWidth(16f) }
 
         btnToggleImmersive.setOnClickListener { viewModel.toggleImmersiveMode() }
+
+        btnHighlighter.setOnClickListener {
+            var selectionHandled = false
+
+            for (i in 0 until pdfRecyclerView.childCount) {
+                val child = pdfRecyclerView.getChildAt(i)
+                val drawView = child.findViewById<CustomDrawView>(R.id.drawView)
+
+                if (drawView?.hasSelection() == true) {
+                    drawView.applyHighlightToSelection(viewModel.uiState.value.strokeColor)
+                    selectionHandled = true
+
+                    viewModel.selectTool(ActiveTool.HAND)
+                }
+            }
+
+            if (!selectionHandled) {
+                viewModel.selectTool(ActiveTool.HIGHLIGHTER)
+            }
+        }
 
         btnToggleReadingMode.setOnClickListener {
             val currentState = viewModel.uiState.value.readingMode
@@ -162,13 +177,15 @@ class MainActivity : AppCompatActivity() {
                 toggleSystemUI(state.isImmersiveMode)
                 applySettingsToCanvas(state)
 
-                if (state.isSaving) {
-                    Toast.makeText(this@MainActivity, "Saving PDF...", Toast.LENGTH_SHORT).show()
-                } else if (state.saveSuccess == true) {
-                    Toast.makeText(this@MainActivity, "Saved Successfully!", Toast.LENGTH_LONG).show()
-                    viewModel.resetSaveState()
-                } else if (state.saveSuccess == false) {
-                    Toast.makeText(this@MainActivity, "Failed to save.", Toast.LENGTH_SHORT).show()
+                if (state.saveSuccess != null) {
+                    if (state.saveSuccess) {
+                        Toast.makeText(this@MainActivity, "PDF Saved Successfully!", Toast.LENGTH_SHORT).show()
+
+                        // NEW: Force the Recycler View to redraw the native annotations
+                        (pdfRecyclerView.adapter as? PdfPageAdapter)?.clearCache()
+                    } else {
+                        Toast.makeText(this@MainActivity, "Failed to save PDF", Toast.LENGTH_SHORT).show()
+                    }
                     viewModel.resetSaveState()
                 }
             }
@@ -198,7 +215,7 @@ class MainActivity : AppCompatActivity() {
                 drawView.currentStrokeWidth = state.strokeWidth
                 drawView.isEraser = state.activeTool == ActiveTool.ERASER
                 drawView.isHighlighter = state.activeTool == ActiveTool.HIGHLIGHTER
-
+                drawView.isTextHighlighter = state.activeTool == ActiveTool.TEXT_HIGHLIGHTER
                 drawView.isNoteTool = state.activeTool == ActiveTool.NOTE
                 drawView.currentNotes = state.studyNotes.filter { it.pageIndex == drawView.pageIndex }
 
@@ -259,13 +276,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun displayPdf() {
-        viewModel.cachedFile?.let { file ->
+        viewModel.mupdfDocument?.let { document ->
             try {
-                pdfRenderer?.close()
-                val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                pdfRenderer = PdfRenderer(fileDescriptor)
-                val adapter = PdfPageAdapter(pdfRenderer!!, pdfRenderer!!.pageCount)
-                adapter.pdfFile = viewModel.cachedFile
+                // Pass the MuPDF Document straight into our Adapter
+                val adapter = PdfPageAdapter(document, document.countPages())
 
                 adapter.currentState = viewModel.uiState.value
                 pdfRecyclerView.adapter = adapter
@@ -354,6 +368,5 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        pdfRenderer?.close()
     }
 }

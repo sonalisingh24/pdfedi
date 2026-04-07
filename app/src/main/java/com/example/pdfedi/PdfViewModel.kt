@@ -6,13 +6,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pdfedi.database.AppDatabase
 import com.example.pdfedi.database.StudyNote
+import com.artifex.mupdf.fitz.Document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 
 class PdfViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -22,27 +22,14 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(EditorState())
     val uiState: StateFlow<EditorState> = _uiState.asStateFlow()
 
-    val cachedFile: File? get() = repository.cachedPdfFile
+    // NEW: Expose the MuPDF Document instead of the raw File
+    val mupdfDocument: Document? get() = repository.mupdfDocument
 
-    fun selectTool(tool: MainActivity.ActiveTool) {
-        _uiState.update { it.copy(activeTool = tool) }
-    }
-
-    fun setColor(color: Int) {
-        _uiState.update { it.copy(strokeColor = color) }
-    }
-
-    fun setStrokeWidth(width: Float) {
-        _uiState.update { it.copy(strokeWidth = width) }
-    }
-
-    fun setReadingMode(mode: ReadingMode) {
-        _uiState.update { it.copy(readingMode = mode) }
-    }
-
-    fun toggleImmersiveMode() {
-        _uiState.update { it.copy(isImmersiveMode = !it.isImmersiveMode) }
-    }
+    fun selectTool(tool: MainActivity.ActiveTool) { _uiState.update { it.copy(activeTool = tool) } }
+    fun setColor(color: Int) { _uiState.update { it.copy(strokeColor = color) } }
+    fun setStrokeWidth(width: Float) { _uiState.update { it.copy(strokeWidth = width) } }
+    fun setReadingMode(mode: ReadingMode) { _uiState.update { it.copy(readingMode = mode) } }
+    fun toggleImmersiveMode() { _uiState.update { it.copy(isImmersiveMode = !it.isImmersiveMode) } }
 
     fun loadPdf(uri: Uri, onReady: () -> Unit) {
         viewModelScope.launch {
@@ -55,11 +42,10 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
             launch {
                 noteDao.getNotesForDocument(uriString).collect { notes ->
                     _uiState.update { it.copy(studyNotes = notes) }
-                }
-            }
+                } }
 
-            val file = repository.createWorkingCopy(uri)
-            if (file != null) {
+            val doc = repository.createWorkingCopy(uri)
+            if (doc != null) {
                 _uiState.update { it.copy(isPdfLoaded = true) }
                 onReady()
             }
@@ -83,15 +69,13 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun resetSaveState() {
-        _uiState.update { it.copy(saveSuccess = null) }
-    }
+    fun resetSaveState() { _uiState.update { it.copy(saveSuccess = null) } }
+    fun saveNote(note: StudyNote) { viewModelScope.launch(Dispatchers.IO) { noteDao.insertNote(note) } }
+    fun deleteNote(note: StudyNote) { viewModelScope.launch(Dispatchers.IO) { noteDao.deleteNote(note) } }
 
-    fun saveNote(note: StudyNote) {
-        viewModelScope.launch(Dispatchers.IO) { noteDao.insertNote(note) }
-    }
-
-    fun deleteNote(note: StudyNote) {
-        viewModelScope.launch(Dispatchers.IO) { noteDao.deleteNote(note) }
+    override fun onCleared() {
+        super.onCleared()
+        // CRITICAL: Prevent native C++ memory leaks!
+        repository.mupdfDocument?.destroy()
     }
 }

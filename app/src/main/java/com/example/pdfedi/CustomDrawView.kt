@@ -1,5 +1,6 @@
 package com.example.pdfedi
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.os.Build
@@ -8,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.core.graphics.ColorUtils
 import com.example.pdfedi.database.StudyNote
+import androidx.core.graphics.toColorInt
 
 class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -34,10 +36,11 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     private var currentStroke: Stroke? = null
     private var currentPaint = createPaint()
 
-    // Variables for Bezier Curve Smoothing
     private var previousX = 0f
     private var previousY = 0f
     private val touchTolerance = 2f
+
+    private val textSelectionColor = Color.parseColor("#4D33B5E5")
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null)
@@ -73,6 +76,8 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         return paint
     }
 
+
+    @SuppressLint("DrawAllocation")
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
@@ -95,10 +100,11 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             canvas.drawPath(it.path, currentPaint)
         }
 
-        // Draw Active Text Snapping Selection
         if (isTextHighlighter && currentSelectionRects.isNotEmpty()) {
-            val paint = createPaint(currentDrawColor, currentStrokeWidth, true)
-            paint.style = Paint.Style.FILL
+            val paint = Paint().apply {
+                color = textSelectionColor
+                style = Paint.Style.FILL
+            }
             for (rect in currentSelectionRects) {
                 canvas.drawRect(rect, paint)
             }
@@ -107,12 +113,12 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         // Draw Sticky Notes
         val iconSize = 60f
         val paintNote = Paint().apply {
-            color = Color.parseColor("#FFEB3B")
+            color = "#FFEB3B".toColorInt()
             style = Paint.Style.FILL
-            setShadowLayer(4f, 2f, 2f, Color.parseColor("#40000000"))
+            setShadowLayer(4f, 2f, 2f, "#40000000".toColorInt())
         }
         val paintNoteOutline = Paint().apply {
-            color = Color.parseColor("#FBC02D")
+            color = "#FBC02D".toColorInt()
             style = Paint.Style.STROKE
             strokeWidth = 2f
         }
@@ -129,6 +135,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (pageIndex == -1) return false
 
@@ -186,16 +193,16 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         // NEW: Text Highlighter Logic
         if (isTextHighlighter) {
             when (event.actionMasked) {
+
                 MotionEvent.ACTION_DOWN -> {
                     parent.requestDisallowInterceptTouchEvent(true)
                     startTouchX = touchX
                     startTouchY = touchY
                     currentSelectionRects.clear()
                 }
+
                 MotionEvent.ACTION_MOVE -> {
-
                     val padding = 25f
-
                     val left = Math.min(startTouchX, touchX) - padding
                     val right = Math.max(startTouchX, touchX) + padding
                     val top = Math.min(startTouchY, touchY) - padding
@@ -210,24 +217,8 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                     }
                     invalidate()
                 }
+
                 MotionEvent.ACTION_UP -> {
-                    if (currentSelectionRects.isNotEmpty()) {
-                        val newStroke = Stroke(
-                            pageIndex = pageIndex,
-                            points = mutableListOf(),
-                            color = currentDrawColor,
-                            width = currentStrokeWidth,
-                            isEraser = false,
-                            isHighlighter = true,
-                            canvasWidth = width.toFloat(),
-                            canvasHeight = height.toFloat(),
-                            path = Path(),
-                            rects = currentSelectionRects.toList(),
-                            isTextHighlight = true
-                        )
-                        StrokeManager.addStroke(newStroke)
-                        currentSelectionRects.clear()
-                    }
                     invalidate()
                 }
             }
@@ -236,6 +227,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
         // Standard Freehand Drawing Logic
         when (event.actionMasked) {
+
             MotionEvent.ACTION_DOWN -> {
                 parent.requestDisallowInterceptTouchEvent(true)
                 currentPaint = createPaint()
@@ -290,5 +282,35 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
         invalidate()
         return true
+    }
+
+    fun hasSelection(): Boolean {
+        return currentSelectionRects.isNotEmpty()
+    }
+
+    fun applyHighlightToSelection(color: Int) {
+        if (currentSelectionRects.isNotEmpty()) {
+            val newStroke = Stroke(
+                pageIndex = pageIndex,
+                points = mutableListOf(),
+                color = color,
+                width = currentStrokeWidth,
+                isEraser = false,
+                isHighlighter = true,
+                canvasWidth = width.toFloat(),
+                canvasHeight = height.toFloat(),
+                path = Path(),
+                rects = currentSelectionRects.toList(),
+                isTextHighlight = true
+            )
+            StrokeManager.addStroke(newStroke)
+            currentSelectionRects.clear() // Clear the blue selection box
+            invalidate()
+        }
+    }
+
+    fun clearSelection() {
+        currentSelectionRects.clear()
+        invalidate()
     }
 }
