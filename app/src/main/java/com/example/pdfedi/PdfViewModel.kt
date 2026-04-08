@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pdfedi.database.AppDatabase
-import com.example.pdfedi.database.StudyNote
 import com.artifex.mupdf.fitz.Document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,44 +17,70 @@ import kotlinx.coroutines.launch
 class PdfViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = PdfRepository(application)
-    private val noteDao = AppDatabase.getDatabase(application).noteDao()
-
-    // 1. Initialize SharedPreferences for global app state
     private val prefs = application.getSharedPreferences("PdfEditorGlobalSettings", Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(EditorState())
     val uiState: StateFlow<EditorState> = _uiState.asStateFlow()
-
     val mupdfDocument: Document? get() = repository.mupdfDocument
 
+    private var previousTool = MainActivity.ActiveTool.MARKER
+
     init {
-        // 2. Load saved settings instantly when app opens
         val savedColor = prefs.getInt("savedStrokeColor", android.graphics.Color.parseColor("#F44336"))
         val savedWidth = prefs.getFloat("savedStrokeWidth", 8f)
         val savedReadingModeName = prefs.getString("savedReadingMode", ReadingMode.NORMAL.name)
-        val savedReadingMode = try {
-            ReadingMode.valueOf(savedReadingModeName ?: ReadingMode.NORMAL.name)
-        } catch (e: Exception) {
-            ReadingMode.NORMAL
-        }
+        val savedReadingMode = try { ReadingMode.valueOf(savedReadingModeName ?: ReadingMode.NORMAL.name) } catch (e: Exception) { ReadingMode.NORMAL }
 
         _uiState.update {
             it.copy(strokeColor = savedColor, strokeWidth = savedWidth, readingMode = savedReadingMode)
         }
     }
 
+    // Mode Transitions
+    fun enterEditMode() {
+        StrokeManager.startSession()
+        _uiState.update { it.copy(isEditMode = true) }
+    }
+
+    fun discardChanges() {
+        StrokeManager.discardSession()
+        _uiState.update { it.copy(isEditMode = false) }
+    }
+
+    fun savePdf() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, saveSuccess = null) }
+            val success = repository.saveAnnotationsToPdf(StrokeManager.globalStrokes)
+            if (success) StrokeManager.clearAll() // Empties memory strokes once flattened into PDF
+
+            _uiState.update {
+                it.copy(
+                    isSaving = false,
+                    saveSuccess = success,
+                    isEditMode = if (success) false else it.isEditMode // Auto exit mode on success
+                )
+            }
+        }
+    }
+
+    // Settings
     fun selectTool(tool: MainActivity.ActiveTool) {
+        if (tool != MainActivity.ActiveTool.ERASER_OBJECT && tool != MainActivity.ActiveTool.ERASER_PIXEL) {
+            previousTool = tool
+        }
         _uiState.update { it.copy(activeTool = tool) }
     }
 
-    // 3. Select Eraser handles the saved mode (Stroke vs Pixel)
     fun selectEraser() {
         val isObjectEraser = prefs.getBoolean("isEraserObject", true)
         val tool = if (isObjectEraser) MainActivity.ActiveTool.ERASER_OBJECT else MainActivity.ActiveTool.ERASER_PIXEL
         _uiState.update { it.copy(activeTool = tool) }
     }
 
-    // 4. Save settings to memory immediately when changed
+    fun onEraseCompleted() {
+        _uiState.update { it.copy(activeTool = previousTool) }
+    }
+
     fun setEraserMode(isObject: Boolean) {
         prefs.edit().putBoolean("isEraserObject", isObject).apply()
         val tool = if (isObject) MainActivity.ActiveTool.ERASER_OBJECT else MainActivity.ActiveTool.ERASER_PIXEL
@@ -81,8 +106,6 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val uriString = uri.toString()
             _uiState.update { it.copy(activeDocumentUri = uriString) }
-            launch { noteDao.getNotesForDocument(uriString).collect { notes -> _uiState.update { it.copy(studyNotes = notes) } } }
-
             val doc = repository.createWorkingCopy(uri)
             if (doc != null) {
                 _uiState.update { it.copy(isPdfLoaded = true) }
@@ -91,14 +114,5 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun searchPdf(query: String, onResult: (List<Int>) -> Unit) { /* Unchanged */ }
-    fun savePdf() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, saveSuccess = null) }
-            val success = repository.saveAnnotationsToPdf(StrokeManager.globalStrokes)
-            _uiState.update { it.copy(isSaving = false, saveSuccess = success) }
-        }
-    }
     fun resetSaveState() { _uiState.update { it.copy(saveSuccess = null) } }
-    fun saveNote(note: StudyNote) { viewModelScope.launch(Dispatchers.IO) { noteDao.insertNote(note) } }
 }

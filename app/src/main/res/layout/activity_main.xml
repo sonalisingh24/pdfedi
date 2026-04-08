@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -147,18 +149,18 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_eraser_stroke"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Stroke" />
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        app:icon="@drawable/ic_eraser" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_eraser_pixel"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:layout_marginStart="8dp"
-                        android:text="Pixel" />
+                        app:icon="@android:drawable/ic_menu_delete" />
                 </LinearLayout>
             </FrameLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -203,16 +205,6 @@
                     <View android:layout_width="1dp" android:layout_height="32dp" android:background="?attr/colorOutlineVariant" android:layout_marginHorizontal="4dp" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/tool_hand"
-                        style="@style/Widget.Material3.Button.IconButton"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="4dp"
-                        app:icon="@drawable/ic_hand"
-                        app:iconTint="?attr/colorOnPrimary"
-                        app:backgroundTint="?attr/colorPrimary" />
-
-                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/tool_pen"
                         style="@style/Widget.Material3.Button.IconButton"
                         android:layout_width="48dp"
@@ -233,34 +225,14 @@
                         app:backgroundTint="@android:color/transparent" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/tool_text_hl"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="4dp"
-                        android:text="Text HL"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        app:backgroundTint="@android:color/transparent" />
-
-                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/tool_eraser"
                         style="@style/Widget.Material3.Button.IconButton"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
                         android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
                         app:icon="@drawable/ic_eraser"
                         app:iconTint="?attr/colorOnSurfaceVariant"
-                        app:backgroundTint="@android:color/transparent" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/tool_note"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="4dp"
-                        android:layout_marginEnd="4dp"
-                        android:text="Note"
-                        android:textColor="?attr/colorOnSurfaceVariant"
                         app:backgroundTint="@android:color/transparent" />
 
                 </LinearLayout>
@@ -268,4 +240,16 @@
         </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_edit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="24dp"
+        android:contentDescription="Enter Write Mode"
+        app:srcCompat="@drawable/ic_marker"
+        app:tint="@android:color/white"
+        app:backgroundTint="?attr/colorPrimary" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

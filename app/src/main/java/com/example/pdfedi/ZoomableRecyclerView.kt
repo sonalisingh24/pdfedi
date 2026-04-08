@@ -26,8 +26,6 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
     init {
         scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                if (isDrawingMode) return false // STRICT MODE: No zooming while drawing
-
                 val previousScale = scaleFactor
                 scaleFactor *= detector.scaleFactor
                 scaleFactor = Math.max(minScale, Math.min(scaleFactor, maxScale))
@@ -45,7 +43,7 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
 
         gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                if (isDrawingMode) return false // STRICT MODE: No zooming while drawing
+                if (isDrawingMode) return false // Prevent accidental zoom while drawing
 
                 if (scaleFactor > minScale) {
                     scaleFactor = minScale
@@ -62,17 +60,13 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
             }
 
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
-                if (isDrawingMode) return false // STRICT MODE: Screen is totally frozen
+                if (isDrawingMode && e2.pointerCount == 1) return false
 
-                // If drawing is OFF and zoomed in, allow 1-finger panning (perfect for mouse)
-                if (scaleFactor > 1.0f) {
-                    translateX -= distanceX
-                    translateY -= distanceY
-                    fixBounds()
-                    invalidate()
-                    return true
-                }
-                return false
+                translateX -= distanceX
+                translateY -= distanceY
+                fixBounds()
+                invalidate()
+                return true
             }
         })
     }
@@ -92,23 +86,17 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
         super.dispatchDraw(canvas)
         canvas.restore()
     }
-    // THE SHIELD: Stops the RecyclerView from stealing touches from the drawing canvas
-    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
-        // If drawing is ON, block 1-finger touches so we can draw.
-        // If 2 fingers are down, return super to let the native RecyclerView scroll vertically!
-        if (isDrawingMode && e.pointerCount == 1) {
-            return false
-        }
-        return super.onInterceptTouchEvent(e)
-    }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        // CRUCIAL: Re-enable RecyclerView interception as soon as a second finger touches
+        if (ev.pointerCount > 1) {
+            requestDisallowInterceptTouchEvent(false)
+        }
+
         scaleDetector.onTouchEvent(ev)
         gestureDetector.onTouchEvent(ev)
 
         val inverseEvent = MotionEvent.obtain(ev)
-
-        // THE FIX: Use a true Android Matrix to translate the entire touch history perfectly
         val matrix = Matrix()
         matrix.postTranslate(-translateX, -translateY)
         matrix.postScale(1f / scaleFactor, 1f / scaleFactor)
@@ -118,5 +106,23 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
         inverseEvent.recycle()
 
         return handled
+    }
+
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        try {
+            // Always allow RecyclerView to intercept if there are 2+ fingers (enables scrolling)
+            if (e.pointerCount > 1) {
+                return super.onInterceptTouchEvent(e)
+            }
+
+            // Allow 1-finger touches to pass through directly to the CustomDrawView
+            if (isDrawingMode && e.pointerCount == 1) {
+                return false
+            }
+
+            return super.onInterceptTouchEvent(e)
+        } catch (ex: IllegalArgumentException) {
+            return false // Failsafe for rare ScaleGestureDetector pointer bugs
+        }
     }
 }

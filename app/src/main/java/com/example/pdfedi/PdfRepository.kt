@@ -5,7 +5,6 @@ import android.net.Uri
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.PDFAnnotation
 import com.artifex.mupdf.fitz.PDFPage
-import com.artifex.mupdf.fitz.Rect
 import com.artifex.mupdf.fitz.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,40 +36,13 @@ class PdfRepository(private val context: Context) {
         }
     }
 
-    // ====================================================
-    // PHASE 5: NATIVE SEARCH
-    // ====================================================
-    suspend fun searchPdfForText(query: String): List<Int> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<Int>()
-        mupdfDocument?.let { doc ->
-            for (i in 0 until doc.countPages()) {
-                val page = doc.loadPage(i)
-                val textPage = page.toStructuredText()
-
-                // MuPDF makes searching incredibly easy
-                val hits = textPage.search(query)
-                if (hits != null && hits.isNotEmpty()) {
-                    results.add(i)
-                }
-
-            }
-        }
-        return@withContext results
-    }
-
-    // ====================================================
-    // PHASE 5: BAKING NATIVE PDF ANNOTATIONS
-    // ====================================================
     suspend fun saveAnnotationsToPdf(strokes: List<Stroke>): Boolean = withContext(Dispatchers.IO) {
         try {
             val doc = mupdfDocument ?: return@withContext false
-            val scale = 2.5f // We must reverse your canvas scaling!
 
-            // Group the strokes so we only have to open each page once
             val strokesByPage = strokes.groupBy { it.pageIndex }
 
             for ((pageIndex, pageStrokes) in strokesByPage) {
-                // FIXED: Cast to PDFPage to allow annotation creation
                 val page = doc.loadPage(pageIndex) as PDFPage
 
                 for (stroke in pageStrokes) {
@@ -79,36 +51,27 @@ class PdfRepository(private val context: Context) {
                     val b = android.graphics.Color.blue(stroke.color) / 255f
                     val colorArray = floatArrayOf(r, g, b)
 
-                    if (stroke.isTextHighlight && stroke.rects != null) {
-                        for (rect in stroke.rects) {
-                            // FIXED: Use PDFAnnotation.TYPE_HIGHLIGHT
-                            val annot = page.createAnnotation(PDFAnnotation.TYPE_HIGHLIGHT)
+                    val annot = page.createAnnotation(PDFAnnotation.TYPE_INK)
+                    // Stroke width is natively pre-calculated into PDF units now
+                    annot.setBorder(stroke.width)
+                    annot.setColor(colorArray)
 
-                            val p = 4f
-                            val pdfRect = Rect(
-                                (rect.left + p) / scale,
-                                (rect.top + p) / scale,
-                                (rect.right - p) / scale,
-                                (rect.bottom - p) / scale
-                            )
-
-                            annot.setRect(pdfRect)
-                            annot.setColor(colorArray)
-                            annot.update()
+                    // Highlighters should be highly translucent
+                    if (stroke.isHighlighter) {
+                        try {
+                            annot.setOpacity(0.5f)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                    } else {
-                        // FIXED: Use PDFAnnotation.TYPE_INK
-                        val annot = page.createAnnotation(PDFAnnotation.TYPE_INK)
-                        annot.setBorder(stroke.width / scale)
-                        annot.setColor(colorArray)
-
-                        val pdfPoints = stroke.points.map {
-                            Point(it.x / scale, it.y / scale)
-                        }.toTypedArray()
-
-                        annot.addInkList(pdfPoints)
-                        annot.update()
                     }
+
+                    // Map pre-aligned PDF coordinates directly into the Fitz Point construct
+                    val pdfPoints = stroke.points.map {
+                        Point(it.x, it.y)
+                    }.toTypedArray()
+
+                    annot.addInkList(pdfPoints)
+                    annot.update()
                 }
             }
 
@@ -122,9 +85,6 @@ class PdfRepository(private val context: Context) {
                     }
                 }
             }
-
-            // Clear our temporary UI strokes because they are now permanent in the PDF!
-            StrokeManager.globalStrokes.clear()
 
             return@withContext true
         } catch (e: Exception) {
