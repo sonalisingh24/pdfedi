@@ -7,32 +7,98 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
-import android.widget.ArrayAdapter
-import android.widget.ListView
-import android.widget.Toast
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class HomeActivity : AppCompatActivity() {
 
-    private lateinit var listView: ListView
-    private val pdfFiles = mutableListOf<File>()
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var progressBar: ProgressBar
+    private lateinit var tvEmptyState: TextView
+    private lateinit var etSearch: EditText
+    private lateinit var btnSort: View
+    private lateinit var topBarCard: View
+
+    private lateinit var adapter: PdfListAdapter
+    private var allPdfs = listOf<PdfFile>()
+    private var currentSortOrder = 0 // 0: Date, 1: Name, 2: Size
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
 
-        listView = findViewById(R.id.pdfListView)
+        // Edge-to-edge support
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // Open the Editor when a file is clicked
-        listView.setOnItemClickListener { _, _, position, _ ->
+        initViews()
+        setupInteractions()
+    }
+
+    private fun initViews() {
+        recyclerView = findViewById(R.id.pdfRecyclerView)
+        progressBar = findViewById(R.id.progressBar)
+        tvEmptyState = findViewById(R.id.tvEmptyState)
+        etSearch = findViewById(R.id.etSearch)
+        btnSort = findViewById(R.id.btn_sort)
+        topBarCard = findViewById(R.id.top_bar_card)
+
+        // Push top bar below status bar notch
+        ViewCompat.setOnApplyWindowInsetsListener(topBarCard) { view, insets ->
+            val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val layoutParams = view.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+            layoutParams.topMargin = statusBarInsets.top + 32
+            view.layoutParams = layoutParams
+            insets
+        }
+
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        adapter = PdfListAdapter(emptyList()) { selectedPdf ->
             val intent = Intent(this, MainActivity::class.java)
-            intent.putExtra("PDF_PATH", pdfFiles[position].absolutePath)
+            intent.putExtra("PDF_PATH", selectedPdf.file.absolutePath)
             startActivity(intent)
+        }
+        recyclerView.adapter = adapter
+    }
+
+    private fun setupInteractions() {
+        etSearch.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                filterPdfs(s.toString())
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        btnSort.setOnClickListener {
+            val options = arrayOf("Sort by Date", "Sort by Name", "Sort by Size")
+            AlertDialog.Builder(this)
+                .setTitle("Sort PDFs")
+                .setSingleChoiceItems(options, currentSortOrder) { dialog, which ->
+                    currentSortOrder = which
+                    filterPdfs(etSearch.text.toString())
+                    dialog.dismiss()
+                }
+                .show()
         }
     }
 
-    // Checking permissions in onResume ensures it re-checks if you return from Settings
     override fun onResume() {
         super.onResume()
         checkPermissionsAndLoad()
@@ -49,48 +115,80 @@ class HomeActivity : AppCompatActivity() {
                 startActivity(intent)
             }
         } else {
-            loadAllPdfs() // Permission is granted, load the files!
+            loadAllPdfsAsync()
         }
     }
 
-    private fun loadAllPdfs() {
-        pdfFiles.clear()
+    private fun loadAllPdfsAsync() {
+        progressBar.visibility = View.VISIBLE
+        tvEmptyState.visibility = View.GONE
 
-        // BULLETPROOF QUERY: Look for the .pdf extension instead of trusting Android's MIME tags
-        val projection = arrayOf(MediaStore.Files.FileColumns.DATA)
-        val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("%.pdf")
-
-        try {
-            val cursor = contentResolver.query(
-                MediaStore.Files.getContentUri("external"),
-                projection, selection, selectionArgs, null
+        // Run heavy lifting off the main UI thread
+        lifecycleScope.launch(Dispatchers.IO) {
+            val loadedFiles = mutableListOf<PdfFile>()
+            val projection = arrayOf(
+                MediaStore.Files.FileColumns.DATA,
+                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                MediaStore.Files.FileColumns.SIZE,
+                MediaStore.Files.FileColumns.DATE_MODIFIED
             )
+            val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
+            val selectionArgs = arrayOf("%.pdf")
 
-            cursor?.use {
-                val dataIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
-                while (it.moveToNext()) {
-                    val path = it.getString(dataIndex)
-                    if (path != null) {
-                        pdfFiles.add(File(path))
+            try {
+                val cursor = contentResolver.query(
+                    MediaStore.Files.getContentUri("external"),
+                    projection, selection, selectionArgs, null
+                )
+
+                cursor?.use {
+                    val dataIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+                    val nameIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                    val sizeIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                    val dateIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+
+                    while (it.moveToNext()) {
+                        val path = it.getString(dataIndex)
+                        if (path != null) {
+                            loadedFiles.add(
+                                PdfFile(
+                                    file = File(path),
+                                    name = it.getString(nameIndex) ?: "Unknown",
+                                    sizeBytes = it.getLong(sizeIndex),
+                                    dateModifiedMs = it.getLong(dateIndex) * 1000L // Convert sec to ms
+                                )
+                            )
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
 
-            // DIAGNOSTIC CHECK: Tell us exactly what the engine found!
-            if (pdfFiles.isEmpty()) {
-                Toast.makeText(this, "0 PDFs found on the device!", Toast.LENGTH_LONG).show()
-            } else {
-                Toast.makeText(this, "Found ${pdfFiles.size} PDFs", Toast.LENGTH_SHORT).show()
+            // Return to UI thread to update views
+            withContext(Dispatchers.Main) {
+                allPdfs = loadedFiles
+                progressBar.visibility = View.GONE
+                filterPdfs(etSearch.text.toString()) // Applies current sort and search
             }
-
-            // Bind the data to our custom black-text layout
-            val adapter = ArrayAdapter(this, R.layout.item_pdf_list, pdfFiles.map { it.name })
-            listView.adapter = adapter
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "Scanner Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun filterPdfs(query: String) {
+        var filteredList = if (query.isBlank()) {
+            allPdfs
+        } else {
+            allPdfs.filter { it.name.contains(query, ignoreCase = true) }
+        }
+
+        filteredList = when (currentSortOrder) {
+            0 -> filteredList.sortedByDescending { it.dateModifiedMs } // Newest first
+            1 -> filteredList.sortedBy { it.name.lowercase() }         // A-Z
+            2 -> filteredList.sortedByDescending { it.sizeBytes }      // Largest first
+            else -> filteredList
+        }
+
+        adapter.updateData(filteredList)
+        tvEmptyState.visibility = if (filteredList.isEmpty()) View.VISIBLE else View.GONE
     }
 }
