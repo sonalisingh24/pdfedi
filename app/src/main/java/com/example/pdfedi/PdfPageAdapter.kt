@@ -92,7 +92,6 @@ class PdfPageAdapter(
                         for (block in stText.blocks) {
                             if (block is com.artifex.mupdf.fitz.StructuredText.TextBlock) {
                                 for (line in block.lines) {
-                                    // EXTRACTING INDIVIDUAL CHARACTERS INSTEAD OF LINES
                                     for (char in line.chars) {
                                         val quad = char.quad
                                         val bbox = com.artifex.mupdf.fitz.Rect(quad)

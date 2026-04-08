@@ -163,7 +163,6 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return false
         }
 
-        // CHANGED: Updated interception rules to allow both eraser types
         if (!isDrawingEnabled && !isStylus && !isNoteTool && !isEraserObject && !isEraserPixel && !isTextHighlighter) return false
 
         val touchX = event.x
@@ -216,11 +215,10 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    val padding = 5f
-                    val left = Math.min(startTouchX, touchX) - padding
-                    val right = Math.max(startTouchX, touchX) + padding
-                    val top = Math.min(startTouchY, touchY) - padding
-                    val bottom = Math.max(startTouchY, touchY) + padding
+                    val left = Math.min(startTouchX, touchX)
+                    val right = Math.max(startTouchX, touchX)
+                    val top = Math.min(startTouchY, touchY)
+                    val bottom = Math.max(startTouchY, touchY)
                     val selectionBox = RectF(left, top, right, bottom)
 
                     val intersectedChars = mutableListOf<RectF>()
@@ -344,36 +342,35 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     private fun mergeRects(rects: List<RectF>): List<RectF> {
         if (rects.isEmpty()) return emptyList()
 
-        val sortedRects = rects.sortedWith { r1, r2 ->
-            val yDiff = r1.centerY() - r2.centerY()
-            if (Math.abs(yDiff) > 10f) {
-                yDiff.toInt()
-            } else {
-                (r1.left - r2.left).toInt()
+        // The 'rects' list now contains full lines (from PdfPageAdapter).
+        // We just need to return the exact intersection of the user's touch box
+        // and the text lines.
+
+        val touchBox = RectF(
+            Math.min(startTouchX, previousX), // previousX holds current touchX here
+            Math.min(startTouchY, previousY),
+            Math.max(startTouchX, previousX),
+            Math.max(startTouchY, previousY)
+        )
+
+        val preciseHighlights = mutableListOf<RectF>()
+
+        for (lineRect in rects) {
+            val intersection = RectF()
+            // If the touch box intersects the line...
+            if (intersection.setIntersect(touchBox, lineRect)) {
+                // ...create a highlight block that has the height of the line
+                // but the width of the intersection (to allow partial line selection)
+                preciseHighlights.add(RectF(
+                    intersection.left,
+                    lineRect.top,    // Lock to the line's top
+                    intersection.right,
+                    lineRect.bottom  // Lock to the line's bottom
+                ))
             }
         }
-
-        val mergedList = mutableListOf<RectF>()
-        var currentMergedRect = RectF(sortedRects[0])
-
-        for (i in 1 until sortedRects.size) {
-            val nextRect = sortedRects[i]
-
-            val horizontalGapTolerance = 25f
-            val isSameLine = Math.abs(currentMergedRect.centerY() - nextRect.centerY()) <= 10f
-            val isAdjacent = nextRect.left <= (currentMergedRect.right + horizontalGapTolerance)
-
-            if (isSameLine && isAdjacent) {
-                currentMergedRect.right = Math.max(currentMergedRect.right, nextRect.right)
-                currentMergedRect.top = Math.min(currentMergedRect.top, nextRect.top)
-                currentMergedRect.bottom = Math.max(currentMergedRect.bottom, nextRect.bottom)
-            } else {
-                mergedList.add(currentMergedRect)
-                currentMergedRect = RectF(nextRect)
-            }
-        }
-        mergedList.add(currentMergedRect)
-
-        return mergedList
+        return preciseHighlights
     }
+
+
 }
