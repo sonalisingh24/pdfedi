@@ -239,7 +239,7 @@
                         android:layout_height="48dp"
                         android:layout_marginStart="4dp"
                         android:layout_marginEnd="4dp"
-                        app:icon="@android:drawable/ic_menu_edit"
+                        app:icon="@drawable/ic_comment"
                         app:iconTint="?attr/colorOnSurfaceVariant"
                         app:backgroundTint="@android:color/transparent" />
 

@@ -14,6 +14,7 @@ import com.example.pdfedi.database.StudyNote
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import androidx.core.graphics.toColorInt
 
 class PdfPageAdapter(
     private val document: Document,
@@ -22,15 +23,10 @@ class PdfPageAdapter(
 
     var onEraseCompleted: (() -> Unit)? = null
 
-    // --- Callbacks & State for Comments ---
     var onEmptySpaceTapped: ((pageIndex: Int, pdfX: Float, pdfY: Float) -> Unit)? = null
     var onNoteTapped: ((StudyNote) -> Unit)? = null
 
     var activeNotes: List<StudyNote> = emptyList()
-        set(value) {
-            field = value
-            notifyDataSetChanged()
-        }
 
     var currentState: EditorState = EditorState()
         set(value) {
@@ -72,9 +68,7 @@ class PdfPageAdapter(
         holder.drawView.isEraserPixel = currentState.activeTool == MainActivity.ActiveTool.ERASER_PIXEL
         holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
         holder.drawView.onEraseCompleted = onEraseCompleted
-
-        // Setup Comment Tool Properties
-        holder.drawView.isCommentTool = currentState.activeTool == MainActivity.ActiveTool.COMMENT
+        holder.drawView.isCommentTool = currentState.activeTool == MainActivity.ActiveTool.COMMENT && currentState.isEditMode
         holder.drawView.activeNotes = activeNotes.filter { it.pageIndex == position }
 
         holder.drawView.onEmptySpaceTapped = { pdfX, pdfY ->
@@ -87,7 +81,6 @@ class PdfPageAdapter(
         val cachedBitmap = memoryCache.get(position)
         if (cachedBitmap != null) {
             holder.pageImageView.setImageBitmap(cachedBitmap)
-            // Still need to trigger a bounds layout check if coming from cache
             holder.drawView.invalidate()
         } else {
             holder.pageImageView.setImageBitmap(null)
@@ -110,8 +103,8 @@ class PdfPageAdapter(
                     if (cachedBitmap == null) {
                         val ctm = Matrix(2.5f, 0f, 0f, 2.5f, 0f, 0f)
                         val bgColor = when (currentState.readingMode) {
-                            ReadingMode.SEPIA -> Color.parseColor("#F4ECD8")
-                            ReadingMode.DARK -> Color.parseColor("#121212")
+                            ReadingMode.SEPIA -> "#F4ECD8".toColorInt()
+                            ReadingMode.DARK -> "#121212".toColorInt()
                             else -> Color.WHITE
                         }
 

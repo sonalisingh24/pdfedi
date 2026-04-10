@@ -45,9 +45,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     private val touchTolerance = 2f
 
     private val commentIconDrawable by lazy {
-        androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_marker)?.apply {
-            setTint(Color.parseColor("#FFEB3B"))
-        }
+        androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_comment)
     }
 
     init {
@@ -175,32 +173,34 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return false
         }
 
+        val mapMatrix = getPdfToViewMatrix()
+
+        val tappedNote = activeNotes.find { note ->
+            val notePts = floatArrayOf(note.x, note.y)
+            mapMatrix.mapPoints(notePts)
+
+            Math.hypot((notePts[0] - event.x).toDouble(), ((notePts[1] - 40f) - event.y).toDouble()) < 80f
+        }
+
+        if (tappedNote != null) {
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                onNoteTapped?.invoke(tappedNote)
+            }
+            return true
+        }
+
         if (!isDrawingEnabled && !isStylus && !isEraserObject && !isEraserPixel && !isCommentTool) return false
 
-        // Translate Raw Screen Pixels to actual PDF point logic
-        val mapMatrix = getPdfToViewMatrix()
         val inverse = Matrix()
         mapMatrix.invert(inverse)
         val pts = floatArrayOf(event.x, event.y)
         inverse.mapPoints(pts)
-
         val pdfX = pts[0]
         val pdfY = pts[1]
 
         if (isCommentTool) {
             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                val tappedNote = activeNotes.find { note ->
-                    val notePts = floatArrayOf(note.x, note.y)
-                    mapMatrix.mapPoints(notePts) // Convert note PDF pos to View pos
-
-                    Math.hypot((notePts[0] - event.x).toDouble(), (notePts[1] - event.y).toDouble()) < 50f
-                }
-
-                if (tappedNote != null) {
-                    onNoteTapped?.invoke(tappedNote)
-                } else {
-                    onEmptySpaceTapped?.invoke(pdfX, pdfY)
-                }
+                onEmptySpaceTapped?.invoke(pdfX, pdfY)
             }
             return true
         }

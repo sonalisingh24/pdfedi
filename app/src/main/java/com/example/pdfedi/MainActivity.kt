@@ -255,7 +255,10 @@ class MainActivity : AppCompatActivity() {
                     adapter.activeNotes = notes
 
                     for (i in 0 until pdfRecyclerView.childCount) {
-                        pdfRecyclerView.getChildAt(i).findViewById<CustomDrawView>(R.id.drawView)?.invalidate()
+                        val drawView = pdfRecyclerView.getChildAt(i).findViewById<CustomDrawView>(R.id.drawView)
+                        if (drawView != null) {
+                            drawView.activeNotes = notes.filter { it.pageIndex == drawView.pageIndex }
+                        }
                     }
                 }
             }
@@ -284,7 +287,8 @@ class MainActivity : AppCompatActivity() {
             btnMode.visibility = View.VISIBLE
         }
 
-        val inactiveColor = Color.parseColor("#757575")
+        val inactiveColor = Color.parseColor("#424242")
+
         val activeBg = Color.parseColor("#2196F3")
         val activeIcon = Color.WHITE
         val tools = listOfNotNull(toolPen, toolHighlighter, toolEraser, toolComment)
@@ -369,7 +373,7 @@ class MainActivity : AppCompatActivity() {
                 drawView.isEraserObject = state.activeTool == ActiveTool.ERASER_OBJECT
                 drawView.isEraserPixel = state.activeTool == ActiveTool.ERASER_PIXEL
                 drawView.isHighlighter = state.activeTool == ActiveTool.HIGHLIGHTER
-                drawView.isCommentTool = state.activeTool == ActiveTool.COMMENT
+                drawView.isCommentTool = state.activeTool == ActiveTool.COMMENT && state.isEditMode
             }
         }
     }
@@ -402,16 +406,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCommentDialog(pageIndex: Int, pdfX: Float, pdfY: Float, existingNote: StudyNote? = null) {
-        val input = EditText(this).apply {
-            setText(existingNote?.textContent ?: "")
-            hint = "Type your comment here..."
-        }
+        val isEditMode = viewModel.uiState.value.isEditMode
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle(if (existingNote == null) "Add Comment" else "Edit Comment")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val text = input.text.toString()
+        // Inflate our custom sticky-note layout
+        val dialogView = layoutInflater.inflate(R.layout.dialog_comment, null)
+        val tvTitle = dialogView.findViewById<android.widget.TextView>(R.id.tvDialogTitle)
+        val etInput = dialogView.findViewById<EditText>(R.id.etCommentInput)
+        val tvRead = dialogView.findViewById<android.widget.TextView>(R.id.tvCommentRead)
+
+        val builder = MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .setBackground(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+
+        if (isEditMode) {
+            tvTitle.text = if (existingNote == null) "New Note" else "Edit Note"
+            etInput.visibility = View.VISIBLE
+            tvRead.visibility = View.GONE
+            etInput.setText(existingNote?.textContent ?: "")
+            etInput.requestFocus()
+
+            builder.setPositiveButton("Save") { _, _ ->
+                val text = etInput.text.toString()
                 if (text.isNotBlank()) {
                     val note = existingNote?.copy(textContent = text)
                         ?: StudyNote(
@@ -420,16 +435,32 @@ class MainActivity : AppCompatActivity() {
                             x = pdfX,
                             y = pdfY,
                             textContent = text
-                        )
-                    // TODO: Implement saveNoteToDatabase in PdfViewModel
-                    // viewModel.saveNoteToDatabase(note)
+                       )
+                    viewModel.saveNoteToDatabase(note)
                 }
             }
-            .setNegativeButton("Cancel", null)
-            .setNeutralButton("Delete") { _, _ ->
-                // TODO: Implement deleteNote in PdfViewModel
-                // existingNote?.let { viewModel.deleteNote(it) }
+            builder.setNegativeButton("Cancel", null)
+
+            if (existingNote != null) {
+                builder.setNeutralButton("Delete") { _, _ ->
+                    viewModel.deleteNote(existingNote)
+                }
             }
-            .show()
+        } else {
+            tvTitle.text = "View Note"
+            etInput.visibility = View.GONE
+            tvRead.visibility = View.VISIBLE
+            tvRead.text = existingNote?.textContent ?: "No content."
+            tvRead.movementMethod = android.text.method.ScrollingMovementMethod()
+
+            builder.setPositiveButton("Close", null)
+        }
+
+        val dialog = builder.create()
+        dialog.show()
+
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.parseColor("#F57F17"))
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.parseColor("#757575"))
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.parseColor("#D32F2F"))
     }
 }
