@@ -2,6 +2,7 @@ package com.example.pdfedi
 
 import android.app.Application
 import android.content.Context
+import com.example.pdfedi.database.StudyNote
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,6 +23,11 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(EditorState())
     val uiState: StateFlow<EditorState> = _uiState.asStateFlow()
     val mupdfDocument: Document? get() = repository.mupdfDocument
+
+    private val noteDao = AppDatabase.getDatabase(application).noteDao()
+
+    private val _activeNotes = MutableStateFlow<List<StudyNote>>(emptyList())
+    val activeNotes: StateFlow<List<StudyNote>> = _activeNotes.asStateFlow()
 
     private var previousTool = MainActivity.ActiveTool.MARKER
 
@@ -50,14 +56,14 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
     fun savePdf() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveSuccess = null) }
-            val success = repository.saveAnnotationsToPdf(StrokeManager.globalStrokes)
-            if (success) StrokeManager.clearAll() // Empties memory strokes once flattened into PDF
+            val success = repository.saveAnnotationsToPdf(StrokeManager.globalStrokes, _activeNotes.value)
+            if (success) StrokeManager.clearAll()
 
             _uiState.update {
                 it.copy(
                     isSaving = false,
                     saveSuccess = success,
-                    isEditMode = if (success) false else it.isEditMode // Auto exit mode on success
+                    isEditMode = if (success) false else it.isEditMode
                 )
             }
         }

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +17,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.pdfedi.database.StudyNote
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -25,7 +27,7 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
-    enum class ActiveTool { MARKER, HIGHLIGHTER, ERASER_OBJECT, ERASER_PIXEL }
+    enum class ActiveTool { MARKER, HIGHLIGHTER, ERASER_OBJECT, ERASER_PIXEL, COMMENT }
 
     // Top Bar
     private lateinit var topBarCard: View
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolPen: MaterialButton
     private lateinit var toolHighlighter: MaterialButton
     private lateinit var toolEraser: MaterialButton
+    private var toolComment: MaterialButton? = null // Safely nullable until added to XML
     private lateinit var fabEdit: FloatingActionButton
 
     private lateinit var pdfRecyclerView: ZoomableRecyclerView
@@ -78,10 +81,15 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
 
         val pdfPath = intent.getStringExtra("PDF_PATH")
+        val uriData = intent.data
+
         if (pdfPath != null) {
             val file = File(pdfPath)
             tvDocumentTitle.text = file.name
             viewModel.loadPdf(Uri.fromFile(file)) { displayPdf() }
+        } else if (uriData != null) {
+            tvDocumentTitle.text = "External PDF"
+            viewModel.loadPdf(uriData) { displayPdf() }
         } else {
             openDocumentLauncher.launch(arrayOf("application/pdf"))
         }
@@ -134,6 +142,8 @@ class MainActivity : AppCompatActivity() {
         toolHighlighter = findViewById(R.id.tool_highlighter)
         toolEraser = findViewById(R.id.tool_eraser)
 
+        toolComment = findViewById(R.id.tool_comment)
+
         fabEdit = findViewById(R.id.fab_edit)
 
         pdfRecyclerView = findViewById(R.id.pdf_recycler_view)
@@ -161,7 +171,6 @@ class MainActivity : AppCompatActivity() {
         btnUndo.setOnClickListener { val p = StrokeManager.undo(); if (p != null) refreshSpecificPage(p) }
         btnRedo.setOnClickListener { val p = StrokeManager.redo(); if (p != null) refreshSpecificPage(p) }
 
-        // --- NEW LOGIC: Toggle options if already active, otherwise select the tool ---
         toolPen.setOnClickListener {
             if (viewModel.uiState.value.activeTool == ActiveTool.MARKER) toggleOptions(ActiveTool.MARKER)
             else viewModel.selectTool(ActiveTool.MARKER)
@@ -177,6 +186,11 @@ class MainActivity : AppCompatActivity() {
                     viewModel.uiState.value.activeTool == ActiveTool.ERASER_PIXEL
             if (isEraser) toggleOptions(ActiveTool.ERASER_OBJECT)
             else viewModel.selectEraser()
+        }
+
+        toolComment?.setOnClickListener {
+            viewModel.selectTool(ActiveTool.COMMENT)
+            toolOptionsCard.visibility = View.GONE
         }
 
         btnEraserStroke.setOnClickListener { viewModel.setEraserMode(true) }
@@ -197,7 +211,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.color_yellow).setOnClickListener { viewModel.setColor(Color.parseColor("#FFEB3B")) }
     }
 
-    // --- HELPER FUNCTION: Toggles the options card visibility ---
     private fun toggleOptions(tool: ActiveTool) {
         if (toolOptionsCard.visibility == View.VISIBLE) {
             toolOptionsCard.visibility = View.GONE
@@ -234,6 +247,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        lifecycleScope.launch {
+            viewModel.activeNotes.collectLatest { notes ->
+                val adapter = pdfRecyclerView.adapter as? PdfPageAdapter
+                if (adapter != null) {
+                    adapter.activeNotes = notes
+
+                    for (i in 0 until pdfRecyclerView.childCount) {
+                        pdfRecyclerView.getChildAt(i).findViewById<CustomDrawView>(R.id.drawView)?.invalidate()
+                    }
+                }
+            }
+        }
     }
 
     private fun updateToolSelectionUI(state: EditorState) {
@@ -261,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         val inactiveColor = Color.parseColor("#757575")
         val activeBg = Color.parseColor("#2196F3")
         val activeIcon = Color.WHITE
-        val tools = listOf(toolPen, toolHighlighter, toolEraser)
+        val tools = listOfNotNull(toolPen, toolHighlighter, toolEraser, toolComment)
 
         for (t in tools) {
             t.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT)
@@ -306,6 +332,10 @@ class MainActivity : AppCompatActivity() {
                 toolEraser.backgroundTintList = android.content.res.ColorStateList.valueOf(activeBg)
                 toolEraser.iconTint = android.content.res.ColorStateList.valueOf(activeIcon)
             }
+            ActiveTool.COMMENT -> {
+                toolComment?.backgroundTintList = android.content.res.ColorStateList.valueOf(activeBg)
+                toolComment?.iconTint = android.content.res.ColorStateList.valueOf(activeIcon)
+            }
         }
     }
 
@@ -339,6 +369,7 @@ class MainActivity : AppCompatActivity() {
                 drawView.isEraserObject = state.activeTool == ActiveTool.ERASER_OBJECT
                 drawView.isEraserPixel = state.activeTool == ActiveTool.ERASER_PIXEL
                 drawView.isHighlighter = state.activeTool == ActiveTool.HIGHLIGHTER
+                drawView.isCommentTool = state.activeTool == ActiveTool.COMMENT
             }
         }
     }
@@ -348,6 +379,16 @@ class MainActivity : AppCompatActivity() {
             val adapter = PdfPageAdapter(document, document.countPages())
             adapter.currentState = viewModel.uiState.value
             adapter.onEraseCompleted = { viewModel.onEraseCompleted() }
+
+            adapter.activeNotes = viewModel.activeNotes.value
+
+            adapter.onEmptySpaceTapped = { pageIndex, pdfX, pdfY ->
+                showCommentDialog(pageIndex, pdfX, pdfY, null)
+            }
+            adapter.onNoteTapped = { note ->
+                showCommentDialog(note.pageIndex, note.x, note.y, note)
+            }
+
             pdfRecyclerView.adapter = adapter
             applySettingsToCanvas(viewModel.uiState.value)
         }
@@ -358,5 +399,37 @@ class MainActivity : AppCompatActivity() {
             val drawView = pdfRecyclerView.getChildAt(i).findViewById<CustomDrawView>(R.id.drawView)
             if (drawView?.pageIndex == pageIndex) drawView.invalidate()
         }
+    }
+
+    private fun showCommentDialog(pageIndex: Int, pdfX: Float, pdfY: Float, existingNote: StudyNote? = null) {
+        val input = EditText(this).apply {
+            setText(existingNote?.textContent ?: "")
+            hint = "Type your comment here..."
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (existingNote == null) "Add Comment" else "Edit Comment")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val text = input.text.toString()
+                if (text.isNotBlank()) {
+                    val note = existingNote?.copy(textContent = text)
+                        ?: StudyNote(
+                            documentUri = viewModel.uiState.value.activeDocumentUri,
+                            pageIndex = pageIndex,
+                            x = pdfX,
+                            y = pdfY,
+                            textContent = text
+                        )
+                    // TODO: Implement saveNoteToDatabase in PdfViewModel
+                    // viewModel.saveNoteToDatabase(note)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Delete") { _, _ ->
+                // TODO: Implement deleteNote in PdfViewModel
+                // existingNote?.let { viewModel.deleteNote(it) }
+            }
+            .show()
     }
 }

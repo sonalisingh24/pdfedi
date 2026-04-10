@@ -8,6 +8,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.graphics.ColorUtils
+import com.example.pdfedi.database.StudyNote
 
 class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -21,6 +22,15 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     var isEraserPixel = false
     var isHighlighter = false
 
+    var isCommentTool = false
+    var activeNotes: List<StudyNote> = emptyList()
+        set(value) {
+            field = value
+            invalidate()
+        }
+    var onEmptySpaceTapped: ((pdfX: Float, pdfY: Float) -> Unit)? = null
+    var onNoteTapped: ((StudyNote) -> Unit)? = null
+
     var onEraseCompleted: (() -> Unit)? = null
 
     // PDF Space Variables
@@ -33,6 +43,12 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     private var previousX = 0f
     private var previousY = 0f
     private val touchTolerance = 2f
+
+    private val commentIconDrawable by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_marker)?.apply {
+            setTint(Color.parseColor("#FFEB3B"))
+        }
+    }
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null)
@@ -95,8 +111,8 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         super.onDraw(canvas)
         if (pdfWidth == 0f) return
 
+        // 1. Draw Strokes inside the PDF coordinate matrix
         canvas.save()
-        // Bind the canvas strictly to the PDF's mathematical space
         canvas.concat(getPdfToViewMatrix())
 
         val myStrokes = StrokeManager.globalStrokes.filter { it.pageIndex == pageIndex }
@@ -126,6 +142,24 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         }
 
         canvas.restore()
+
+        val mapMatrix = getPdfToViewMatrix()
+
+        commentIconDrawable?.let { icon ->
+            activeNotes.forEach { note ->
+                val pts = floatArrayOf(note.x, note.y)
+                mapMatrix.mapPoints(pts)
+
+                val iconSize = 80
+                val left = (pts[0] - (iconSize / 2f)).toInt()
+                val bottom = pts[1].toInt()
+                val top = bottom - iconSize
+                val right = left + iconSize
+
+                icon.setBounds(left, top, right, bottom)
+                icon.draw(canvas)
+            }
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -141,7 +175,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return false
         }
 
-        if (!isDrawingEnabled && !isStylus && !isEraserObject && !isEraserPixel) return false
+        if (!isDrawingEnabled && !isStylus && !isEraserObject && !isEraserPixel && !isCommentTool) return false
 
         // Translate Raw Screen Pixels to actual PDF point logic
         val mapMatrix = getPdfToViewMatrix()
@@ -153,7 +187,24 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         val pdfX = pts[0]
         val pdfY = pts[1]
 
-        // Ensure scale thickness translates to PDF scale as well
+        if (isCommentTool) {
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                val tappedNote = activeNotes.find { note ->
+                    val notePts = floatArrayOf(note.x, note.y)
+                    mapMatrix.mapPoints(notePts) // Convert note PDF pos to View pos
+
+                    Math.hypot((notePts[0] - event.x).toDouble(), (notePts[1] - event.y).toDouble()) < 50f
+                }
+
+                if (tappedNote != null) {
+                    onNoteTapped?.invoke(tappedNote)
+                } else {
+                    onEmptySpaceTapped?.invoke(pdfX, pdfY)
+                }
+            }
+            return true
+        }
+
         val pdfScale = mapMatrix.mapRadius(1f)
 
         if (isEraserObject) {

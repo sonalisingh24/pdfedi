@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.android.AndroidDrawDevice
+import com.example.pdfedi.database.StudyNote
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +21,16 @@ class PdfPageAdapter(
 ) : RecyclerView.Adapter<PdfPageAdapter.PageViewHolder>() {
 
     var onEraseCompleted: (() -> Unit)? = null
+
+    // --- Callbacks & State for Comments ---
+    var onEmptySpaceTapped: ((pageIndex: Int, pdfX: Float, pdfY: Float) -> Unit)? = null
+    var onNoteTapped: ((StudyNote) -> Unit)? = null
+
+    var activeNotes: List<StudyNote> = emptyList()
+        set(value) {
+            field = value
+            notifyDataSetChanged()
+        }
 
     var currentState: EditorState = EditorState()
         set(value) {
@@ -61,6 +72,17 @@ class PdfPageAdapter(
         holder.drawView.isEraserPixel = currentState.activeTool == MainActivity.ActiveTool.ERASER_PIXEL
         holder.drawView.isHighlighter = currentState.activeTool == MainActivity.ActiveTool.HIGHLIGHTER
         holder.drawView.onEraseCompleted = onEraseCompleted
+
+        // Setup Comment Tool Properties
+        holder.drawView.isCommentTool = currentState.activeTool == MainActivity.ActiveTool.COMMENT
+        holder.drawView.activeNotes = activeNotes.filter { it.pageIndex == position }
+
+        holder.drawView.onEmptySpaceTapped = { pdfX, pdfY ->
+            onEmptySpaceTapped?.invoke(position, pdfX, pdfY)
+        }
+        holder.drawView.onNoteTapped = { note ->
+            onNoteTapped?.invoke(note)
+        }
 
         val cachedBitmap = memoryCache.get(position)
         if (cachedBitmap != null) {

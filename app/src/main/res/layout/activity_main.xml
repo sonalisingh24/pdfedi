@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -230,8 +228,18 @@
                         android:layout_width="48dp"
                         android:layout_height="48dp"
                         android:layout_marginStart="4dp"
-                        android:layout_marginEnd="4dp"
                         app:icon="@drawable/ic_eraser"
+                        app:iconTint="?attr/colorOnSurfaceVariant"
+                        app:backgroundTint="@android:color/transparent" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/tool_comment"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        app:icon="@android:drawable/ic_menu_edit"
                         app:iconTint="?attr/colorOnSurfaceVariant"
                         app:backgroundTint="@android:color/transparent" />
 
