@@ -27,7 +27,7 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
-    enum class ActiveTool { MARKER, HIGHLIGHTER, ERASER_OBJECT, ERASER_PIXEL, COMMENT }
+    enum class ActiveTool { NONE, MARKER, HIGHLIGHTER, ERASER_OBJECT, ERASER_PIXEL, COMMENT }
 
     // Top Bar
     private lateinit var topBarCard: View
@@ -176,20 +176,61 @@ class MainActivity : AppCompatActivity() {
             else viewModel.selectTool(ActiveTool.MARKER)
         }
 
+        // --- PEN ---
+        toolPen.setOnClickListener {
+            val currentState = viewModel.uiState.value
+            if (currentState.activeTool == ActiveTool.MARKER) {
+                viewModel.selectTool(ActiveTool.NONE) // Turn off to allow scrolling
+                toolOptionsCard.visibility = View.GONE
+            } else {
+                viewModel.selectTool(ActiveTool.MARKER)
+            }
+        }
+        toolPen.setOnLongClickListener {
+            viewModel.selectTool(ActiveTool.MARKER)
+            toggleOptions(ActiveTool.MARKER) // Open color/thickness menu
+            true
+        }
+
+        // --- HIGHLIGHTER ---
         toolHighlighter.setOnClickListener {
-            if (viewModel.uiState.value.activeTool == ActiveTool.HIGHLIGHTER) toggleOptions(ActiveTool.HIGHLIGHTER)
-            else viewModel.selectTool(ActiveTool.HIGHLIGHTER)
+            val currentState = viewModel.uiState.value
+            if (currentState.activeTool == ActiveTool.HIGHLIGHTER) {
+                viewModel.selectTool(ActiveTool.NONE)
+                toolOptionsCard.visibility = View.GONE
+            } else {
+                viewModel.selectTool(ActiveTool.HIGHLIGHTER)
+            }
+        }
+        toolHighlighter.setOnLongClickListener {
+            viewModel.selectTool(ActiveTool.HIGHLIGHTER)
+            toggleOptions(ActiveTool.HIGHLIGHTER)
+            true
         }
 
         toolEraser.setOnClickListener {
-            val isEraser = viewModel.uiState.value.activeTool == ActiveTool.ERASER_OBJECT ||
-                    viewModel.uiState.value.activeTool == ActiveTool.ERASER_PIXEL
-            if (isEraser) toggleOptions(ActiveTool.ERASER_OBJECT)
-            else viewModel.selectEraser()
+            val currentState = viewModel.uiState.value
+            val isEraserActive = currentState.activeTool == ActiveTool.ERASER_OBJECT || currentState.activeTool == ActiveTool.ERASER_PIXEL
+            if (isEraserActive) {
+                viewModel.selectTool(ActiveTool.NONE)
+                toolOptionsCard.visibility = View.GONE
+            } else {
+                viewModel.selectEraser()
+            }
+        }
+        toolEraser.setOnLongClickListener {
+            viewModel.selectEraser()
+            toggleOptions(ActiveTool.ERASER_OBJECT)
+            true
         }
 
         toolComment?.setOnClickListener {
-            viewModel.selectTool(ActiveTool.COMMENT)
+            val currentState = viewModel.uiState.value
+            if (currentState.activeTool == ActiveTool.COMMENT) {
+                viewModel.selectTool(ActiveTool.NONE)
+            } else {
+                viewModel.selectTool(ActiveTool.COMMENT)
+            }
             toolOptionsCard.visibility = View.GONE
         }
 
@@ -339,6 +380,8 @@ class MainActivity : AppCompatActivity() {
             ActiveTool.COMMENT -> {
                 toolComment?.backgroundTintList = android.content.res.ColorStateList.valueOf(activeBg)
                 toolComment?.iconTint = android.content.res.ColorStateList.valueOf(activeIcon)
+            }
+            ActiveTool.NONE -> {
             }
         }
     }

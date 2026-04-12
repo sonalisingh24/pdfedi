@@ -32,7 +32,7 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
 
     private val notesPendingDeletion = mutableListOf<StudyNote>()
 
-    private var previousTool = MainActivity.ActiveTool.MARKER
+    private var previousTool = MainActivity.ActiveTool.NONE
 
     init {
         val savedColor = prefs.getInt("savedStrokeColor", android.graphics.Color.parseColor("#F44336"))

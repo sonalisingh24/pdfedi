@@ -6,7 +6,7 @@ enum class ReadingMode { NORMAL, SEPIA, DARK }
 
 data class EditorState(
     val isEditMode: Boolean = false,
-    val activeTool: MainActivity.ActiveTool = MainActivity.ActiveTool.MARKER,
+    val activeTool: MainActivity.ActiveTool = MainActivity.ActiveTool.NONE,
     val strokeColor: Int = Color.parseColor("#F44336"),
     val strokeWidth: Float = 8f,
     val isSaving: Boolean = false,
@@ -16,6 +16,6 @@ data class EditorState(
     val isImmersiveMode: Boolean = false,
     val activeDocumentUri: String = "",
     val isSearching: Boolean = false
-) {
-    val isDrawingMode: Boolean = true
+) { val isDrawingMode: Boolean
+        get() = activeTool != MainActivity.ActiveTool.NONE
 }
