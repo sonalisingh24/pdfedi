@@ -293,20 +293,6 @@ class PdfRepository(private val context: Context) {
         )
     }
 
-    private fun parseTextBox(pageIndex: Int, annotation: PDFAnnotation): TextBoxAnnotation? {
-        val rect = annotation.rect ?: return null
-        val text = annotation.contents ?: return null
-        if (text.isBlank()) return null
-
-        return TextBoxAnnotation(
-            pageIndex = pageIndex,
-            rect = PdfRect(rect.x0, rect.y0, rect.x1, rect.y1),
-            text = text,
-            color = parseColor(annotation.color),
-            fontSize = 16f
-        )
-    }
-
     private fun parseNote(pageIndex: Int, documentUri: String, annotation: PDFAnnotation): StudyNote? {
         val rect = annotation.rect ?: return null
         val content = annotation.contents ?: return null
@@ -343,12 +329,39 @@ class PdfRepository(private val context: Context) {
         annotation.update()
     }
 
+    private fun parseTextBox(pageIndex: Int, annotation: PDFAnnotation): TextBoxAnnotation? {
+        val rect = annotation.rect ?: return null
+        val text = annotation.contents ?: return null
+        if (text.isBlank()) return null
+
+        val savedFontSize = try {
+            annotation.author?.toFloatOrNull() ?: 16f
+        } catch (e: Exception) {
+            16f
+        }
+
+        return TextBoxAnnotation(
+            pageIndex = pageIndex,
+            rect = PdfRect(rect.x0, rect.y0, rect.x1, rect.y1),
+            text = text,
+            color = parseColor(annotation.color),
+            fontSize = savedFontSize
+        )
+    }
+
     private fun saveTextBox(page: PDFPage, textBox: TextBoxAnnotation) {
         val annotation = page.createAnnotation(PDFAnnotation.TYPE_FREE_TEXT)
         annotation.setRect(Rect(textBox.rect.left, textBox.rect.top, textBox.rect.right, textBox.rect.bottom))
         annotation.setContents(textBox.text)
         annotation.setColor(toPdfColor(textBox.color))
         annotation.setBorderWidth(0f)
+
+        try {
+            annotation.author = textBox.fontSize.toString()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         annotation.update()
     }
 

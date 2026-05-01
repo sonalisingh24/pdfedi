@@ -462,11 +462,11 @@ class MainActivity : AppCompatActivity() {
         adapter.onNoteTapped = { note ->
             showCommentDialog(note.pageIndex, note.x, note.y, note)
         }
-        adapter.onTextBoxRequested = { pageIndex, pdfX, pdfY ->
-            showTextBoxDialog(pageIndex, pdfX, pdfY, null)
+        adapter.onTextBoxRequested = { pageIndex, pdfX, pdfY, pdfWidth, pdfHeight ->
+            showTextBoxDialog(pageIndex, pdfX, pdfY, null, pdfWidth, pdfHeight)
         }
-        adapter.onTextBoxTapped = { textBox ->
-            showTextBoxDialog(textBox.pageIndex, textBox.rect.left, textBox.rect.top, textBox)
+        adapter.onTextBoxTapped = { textBox, pdfWidth, pdfHeight ->
+            showTextBoxDialog(textBox.pageIndex, textBox.rect.left, textBox.rect.top, textBox, pdfWidth, pdfHeight)
         }
         adapter.signatureTemplateProvider = { viewModel.loadSignatureTemplate() }
         adapter.searchResults = viewModel.searchResults.value
@@ -919,7 +919,14 @@ class MainActivity : AppCompatActivity() {
         dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.parseColor("#D32F2F"))
     }
 
-    private fun showTextBoxDialog(pageIndex: Int, pdfX: Float, pdfY: Float, existing: TextBoxAnnotation?) {
+    private fun showTextBoxDialog(
+        pageIndex: Int,
+        pdfX: Float,
+        pdfY: Float,
+        existing: TextBoxAnnotation?,
+        pdfWidth: Float,
+        pdfHeight: Float
+    ) {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 16, 24, 0)
@@ -946,9 +953,9 @@ class MainActivity : AppCompatActivity() {
                 if (text.isBlank()) return@setPositiveButton
 
                 val changedPages = if (existing == null) {
-                    viewModel.addTextBox(pageIndex, pdfX, pdfY, text, fontSize)
+                    viewModel.addTextBox(pageIndex, pdfX, pdfY, text, fontSize, pdfWidth, pdfHeight)
                 } else {
-                    viewModel.updateTextBox(existing.copy(text = text, fontSize = fontSize))
+                    viewModel.updateTextBox(existing.copy(text = text, fontSize = fontSize), pdfWidth, pdfHeight)
                 }
                 refreshPages(changedPages)
             }
@@ -963,7 +970,6 @@ class MainActivity : AppCompatActivity() {
             }
             .show()
     }
-
     private fun showSignatureDialog(selectToolAfterSave: Boolean) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_signature, null)
         val signaturePad = dialogView.findViewById<SignaturePadView>(R.id.signature_pad)

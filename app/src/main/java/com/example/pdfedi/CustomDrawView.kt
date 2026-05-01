@@ -59,8 +59,8 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
     var onSessionChanged: ((Set<Int>) -> Unit)? = null
     var onCommentRequested: ((pdfX: Float, pdfY: Float) -> Unit)? = null
     var onNoteTapped: ((StudyNote) -> Unit)? = null
-    var onTextBoxRequested: ((pdfX: Float, pdfY: Float) -> Unit)? = null
-    var onTextBoxTapped: ((TextBoxAnnotation) -> Unit)? = null
+    var onTextBoxRequested: ((pdfX: Float, pdfY: Float, pdfWidth: Float, pdfHeight: Float) -> Unit)? = null
+    var onTextBoxTapped: ((TextBoxAnnotation, pdfWidth: Float, pdfHeight: Float) -> Unit)? = null
 
     private var pdfX0 = 0f
     private var pdfY0 = 0f
@@ -179,8 +179,9 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
         if (points.isEmpty()) return path
 
         path.moveTo(points.first().x, points.first().y)
+
         if (points.size == 1) {
-            path.lineTo(points.first().x, points.first().y)
+            path.lineTo(points.first().x + 0.1f, points.first().y)
             return path
         }
 
@@ -189,15 +190,11 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
             return path
         }
 
-        var previous = points.first()
         for (index in 1 until points.size) {
             val point = points[index]
-            val midX = (previous.x + point.x) / 2f
-            val midY = (previous.y + point.y) / 2f
-            path.quadTo(previous.x, previous.y, midX, midY)
-            previous = point
+            path.lineTo(point.x, point.y)
         }
-        path.lineTo(previous.x, previous.y)
+
         return path
     }
 
@@ -358,6 +355,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
         if (draggingTextBox != null) {
             when (event.actionMasked) {
+
                 MotionEvent.ACTION_MOVE -> {
                     val dx = abs(event.x - touchDownX)
                     val dy = abs(event.y - touchDownY)
@@ -365,22 +363,27 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
                         isDragging = true
                     }
 
-                    val newLeft = pdfX - dragOffsetX
-                    val newTop = pdfY - dragOffsetY
                     val width = draggingTextBox!!.rect.right - draggingTextBox!!.rect.left
                     val height = draggingTextBox!!.rect.bottom - draggingTextBox!!.rect.top
 
+                    val requestedLeft = pdfX - dragOffsetX
+                    val requestedTop = pdfY - dragOffsetY
+
+                    val clampedLeft = requestedLeft.coerceIn(0f, (pdfWidth - width).coerceAtLeast(0f))
+                    val clampedTop = requestedTop.coerceIn(0f, (pdfHeight - height).coerceAtLeast(0f))
+
                     draggingTextBox = draggingTextBox!!.copy(
-                        rect = PdfRect(newLeft, newTop, newLeft + width, newTop + height)
+                        rect = PdfRect(clampedLeft, clampedTop, clampedLeft + width, clampedTop + height)
                     )
 
                     StrokeManager.updateTextBox(draggingTextBox!!)
                     invalidate()
                 }
+
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (!isDragging) {
-                        onTextBoxTapped?.invoke(draggingTextBox!!)
-                    } else {
+                        onTextBoxTapped?.invoke(draggingTextBox!!, pdfWidth, pdfHeight)
+                    }else {
                         val changedPages = StrokeManager.updateTextBox(draggingTextBox!!)
                         if (changedPages.isNotEmpty()) {
                             onSessionChanged?.invoke(changedPages)
@@ -412,7 +415,7 @@ class CustomDrawView(context: Context, attrs: AttributeSet?) : View(context, att
 
         if (isTextBoxTool) {
             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                onTextBoxRequested?.invoke(pdfX, pdfY)
+                onTextBoxRequested?.invoke(pdfX, pdfY, pdfWidth, pdfHeight)
             }
             return true
         }

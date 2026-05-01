@@ -39,8 +39,8 @@ class PdfPageAdapter(
     var onSessionChanged: ((Set<Int>) -> Unit)? = null
     var onCommentRequested: ((pageIndex: Int, pdfX: Float, pdfY: Float) -> Unit)? = null
     var onNoteTapped: ((StudyNote) -> Unit)? = null
-    var onTextBoxRequested: ((pageIndex: Int, pdfX: Float, pdfY: Float) -> Unit)? = null
-    var onTextBoxTapped: ((TextBoxAnnotation) -> Unit)? = null
+    var onTextBoxRequested: ((pageIndex: Int, pdfX: Float, pdfY: Float, pdfWidth: Float, pdfHeight: Float) -> Unit)? = null
+    var onTextBoxTapped: ((TextBoxAnnotation, pdfWidth: Float, pdfHeight: Float) -> Unit)? = null
     var signatureTemplateProvider: (() -> SignatureTemplate?)? = null
 
     var currentState: EditorState = EditorState()
@@ -127,11 +127,11 @@ class PdfPageAdapter(
             onCommentRequested?.invoke(position, pdfX, pdfY)
         }
         holder.drawView.onNoteTapped = { note -> onNoteTapped?.invoke(note) }
-        holder.drawView.onTextBoxRequested = { pdfX, pdfY ->
-            onTextBoxRequested?.invoke(position, pdfX, pdfY)
+        holder.drawView.onTextBoxRequested = { pdfX, pdfY, pdfWidth, pdfHeight ->
+            onTextBoxRequested?.invoke(position, pdfX, pdfY, pdfWidth, pdfHeight)
         }
-        holder.drawView.onTextBoxTapped = { textBox ->
-            onTextBoxTapped?.invoke(textBox)
+        holder.drawView.onTextBoxTapped = { textBox, pdfWidth, pdfHeight ->
+            onTextBoxTapped?.invoke(textBox, pdfWidth, pdfHeight)
         }
         holder.drawView.signatureTemplateProvider = signatureTemplateProvider
         holder.drawView.searchMatches = searchResults.filter { it.pageIndex == position }

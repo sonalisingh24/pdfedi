@@ -283,12 +283,26 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
         return layout.height + (padding * 2)
     }
 
-    fun addTextBox(pageIndex: Int, x: Float, y: Float, text: String, fontSize: Float): Set<Int> {
-        val width = 250f // Slightly wider default to prevent early wrapping
+    private fun clampRect(rect: PdfRect, pdfWidth: Float, pdfHeight: Float): PdfRect {
+        val width = rect.right - rect.left
+        val height = rect.bottom - rect.top
+
+        val clampedLeft = rect.left.coerceIn(0f, (pdfWidth - width).coerceAtLeast(0f))
+        val clampedTop = rect.top.coerceIn(0f, (pdfHeight - height).coerceAtLeast(0f))
+
+        return PdfRect(clampedLeft, clampedTop, clampedLeft + width, clampedTop + height)
+    }
+
+    fun addTextBox(pageIndex: Int, x: Float, y: Float, text: String, fontSize: Float, pdfWidth: Float, pdfHeight: Float): Set<Int> {
+        val width = 250f
         val height = calculateTextBoxHeight(text, fontSize, width)
+
+        val requestedRect = PdfRect(x, y, x + width, y + height)
+        val clampedRect = clampRect(requestedRect, pdfWidth, pdfHeight)
+
         val textBox = TextBoxAnnotation(
             pageIndex = pageIndex,
-            rect = PdfRect(x, y, x + width, y + height),
+            rect = clampedRect,
             text = text,
             color = _uiState.value.strokeColor,
             fontSize = fontSize
@@ -298,12 +312,14 @@ class PdfViewModel(application: Application) : AndroidViewModel(application) {
         return changedPages
     }
 
-    fun updateTextBox(textBox: TextBoxAnnotation): Set<Int> {
+    fun updateTextBox(textBox: TextBoxAnnotation, pdfWidth: Float, pdfHeight: Float): Set<Int> {
         val width = textBox.rect.right - textBox.rect.left
         val height = calculateTextBoxHeight(textBox.text, textBox.fontSize, width)
-        val updatedBox = textBox.copy(
-            rect = PdfRect(textBox.rect.left, textBox.rect.top, textBox.rect.left + width, textBox.rect.top + height)
-        )
+
+        val requestedRect = PdfRect(textBox.rect.left, textBox.rect.top, textBox.rect.left + width, textBox.rect.top + height)
+        val clampedRect = clampRect(requestedRect, pdfWidth, pdfHeight)
+
+        val updatedBox = textBox.copy(rect = clampedRect)
         val changedPages = StrokeManager.updateTextBox(updatedBox)
         refreshSessionState()
         return changedPages
