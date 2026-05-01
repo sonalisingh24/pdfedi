@@ -1,6 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-             android:layout_width="match_parent"
-             android:layout_height="match_parent">
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/bottom_tool_pill"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="12dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="28dp"
+    app:cardElevation="8dp"
+    app:strokeWidth="0dp">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <HorizontalScrollView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_editor_dock"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="72dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="8dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_undo"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:contentDescription="Undo"
+                    app:backgroundTint="#243244"
+                    app:icon="@drawable/ic_undo"
+                    app:iconSize="23dp"
+                    app:iconTint="#DCEBFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_redo"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="Redo"
+                    app:backgroundTint="#243244"
+                    app:icon="@drawable/ic_redo"
+                    app:iconSize="23dp"
+                    app:iconTint="#DCEBFF" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="42dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="@drawable/bg_editor_divider" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_pen"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:contentDescription="Pen"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_marker"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_highlighter"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="Highlighter"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_highlighter"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_eraser"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="Eraser"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_eraser"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_comment"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="Sticky note"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_comment"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_text"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="Text box"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_text_box"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tool_signature"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="2dp"
+                    android:contentDescription="Signature"
+                    app:backgroundTint="#182231"
+                    app:icon="@drawable/ic_signature"
+                    app:iconSize="24dp"
+                    app:iconTint="#FFFFFF" />
+            </LinearLayout>
+        </HorizontalScrollView>
+    </com.google.android.material.card.MaterialCardView>
+

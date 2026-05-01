@@ -19,6 +19,7 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
     private val maxScale = 4.0f
 
     var isDrawingMode = false
+    var onScaleSettled: ((Float) -> Unit)? = null
 
     private val scaleDetector: ScaleGestureDetector
     private val gestureDetector: GestureDetector
@@ -39,6 +40,11 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
                 invalidate()
                 return true
             }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                super.onScaleEnd(detector)
+                onScaleSettled?.invoke(scaleFactor)
+            }
         })
 
         gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
@@ -56,6 +62,7 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
                 }
                 fixBounds()
                 invalidate()
+                onScaleSettled?.invoke(scaleFactor)
                 return true
             }
 
@@ -77,6 +84,13 @@ class ZoomableRecyclerView(context: Context, attrs: AttributeSet?) : RecyclerVie
 
         translateX = Math.max(-maxTranslateX, Math.min(0f, translateX))
         translateY = Math.max(-maxTranslateY, Math.min(0f, translateY))
+    }
+
+    fun resetTransform() {
+        scaleFactor = minScale
+        translateX = 0f
+        translateY = 0f
+        invalidate()
     }
 
     override fun dispatchDraw(canvas: Canvas) {

@@ -1,6 +1,256 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-             android:layout_width="match_parent"
-             android:layout_height="match_parent">
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/tool_options_card"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginBottom="14dp"
+    android:visibility="gone"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="10dp"
+    app:strokeWidth="0dp">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:animateLayoutChanges="true"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="14dp">
+
+        <LinearLayout
+            android:id="@+id/options_pen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Stroke"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/slider_thickness"
+                android:layout_width="216dp"
+                android:layout_height="wrap_content"
+                app:thumbColor="?attr/colorPrimary"
+                app:trackColorActive="?attr/colorPrimary"
+                app:trackColorInactive="?attr/colorSurfaceVariant" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/color_black"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#212121"
+                    app:cardCornerRadius="17dp"
+                    app:strokeColor="?attr/colorSurface"
+                    app:strokeWidth="2dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/color_red"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#F44336"
+                    app:cardCornerRadius="17dp"
+                    app:strokeColor="?attr/colorSurface"
+                    app:strokeWidth="2dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/color_blue"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#2196F3"
+                    app:cardCornerRadius="17dp"
+                    app:strokeColor="?attr/colorSurface"
+                    app:strokeWidth="2dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/color_green"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#4CAF50"
+                    app:cardCornerRadius="17dp"
+                    app:strokeColor="?attr/colorSurface"
+                    app:strokeWidth="2dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/color_yellow"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#FFEB3B"
+                    app:cardCornerRadius="17dp"
+                    app:strokeColor="?attr/colorSurface"
+                    app:strokeWidth="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_custom_color"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="Custom color"
+                    app:backgroundTint="?attr/colorSecondaryContainer"
+                    app:icon="@drawable/ic_color_palette"
+                    app:iconSize="22dp"
+                    app:iconTint="?attr/colorOnSecondaryContainer" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_line_lock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:text="Straight"
+                    android:textColor="?attr/colorOnSurface" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/options_eraser"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Eraser"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_eraser_stroke"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:contentDescription="Stroke eraser"
+                    app:backgroundTint="?attr/colorSecondaryContainer"
+                    app:icon="@drawable/ic_erase_stroke"
+                    app:iconSize="24dp"
+                    app:iconTint="?attr/colorOnSecondaryContainer" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_eraser_pixel"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="Pixel eraser"
+                    app:backgroundTint="?attr/colorSecondaryContainer"
+                    app:icon="@drawable/ic_erase_pixel"
+                    app:iconSize="24dp"
+                    app:iconTint="?attr/colorOnSecondaryContainer" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_erase_all"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:text="All"
+                    android:textColor="?attr/colorOnSurface"
+                    app:strokeColor="?attr/colorOutlineVariant" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_erase_ink"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="40dp"
+                    android:text="Ink"
+                    android:textColor="?attr/colorOnSurface"
+                    app:strokeColor="?attr/colorOutlineVariant" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_erase_highlights"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="40dp"
+                    android:text="Mark"
+                    android:textColor="?attr/colorOnSurface"
+                    app:strokeColor="?attr/colorOutlineVariant" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_erase_text"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="40dp"
+                    android:text="Text"
+                    android:textColor="?attr/colorOnSurface"
+                    app:strokeColor="?attr/colorOutlineVariant" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_clear_page"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Clear page"
+                android:textColor="?attr/colorError"
+                app:strokeColor="?attr/colorError" />
+        </LinearLayout>
+    </FrameLayout>
+</com.google.android.material.card.MaterialCardView>

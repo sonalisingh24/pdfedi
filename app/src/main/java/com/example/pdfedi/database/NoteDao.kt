@@ -12,9 +12,18 @@ interface NoteDao {
     @Query("SELECT * FROM study_notes WHERE documentUri = :uri")
     fun getNotesForDocument(uri: String): Flow<List<StudyNote>>
 
+    @Query("SELECT * FROM study_notes WHERE documentUri = :uri")
+    suspend fun getNotesForDocumentOnce(uri: String): List<StudyNote>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: StudyNote)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNotes(notes: List<StudyNote>)
+
     @Delete
     suspend fun deleteNote(note: StudyNote)
+
+    @Query("DELETE FROM study_notes WHERE documentUri = :uri")
+    suspend fun deleteNotesForDocument(uri: String)
 }

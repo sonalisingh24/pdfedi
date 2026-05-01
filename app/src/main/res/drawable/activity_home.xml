@@ -3,19 +3,19 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#ECECEC">
+    android:background="?attr/colorSurfaceVariant">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#4CAF50"
+        android:background="?attr/colorPrimary"
         android:padding="16dp"
         android:text="All PDFs on Phone"
-        android:textColor="#FFFFFF"
+        android:textColor="?attr/colorOnPrimary"
         android:textSize="20sp"
         android:textStyle="bold" />
 
-    <ListView
+    <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/pdfListView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

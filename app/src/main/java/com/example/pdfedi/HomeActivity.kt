@@ -37,13 +37,12 @@ class HomeActivity : AppCompatActivity() {
 
     private lateinit var adapter: PdfListAdapter
     private var allPdfs = listOf<PdfFile>()
-    private var currentSortOrder = 0 // 0: Date, 1: Name, 2: Size
+    private var currentSortOrder = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
 
-        // Edge-to-edge support
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -59,11 +58,10 @@ class HomeActivity : AppCompatActivity() {
         btnSort = findViewById(R.id.btn_sort)
         topBarCard = findViewById(R.id.top_bar_card)
 
-        // Push top bar below status bar notch
         ViewCompat.setOnApplyWindowInsetsListener(topBarCard) { view, insets ->
             val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             val layoutParams = view.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
-            layoutParams.topMargin = statusBarInsets.top + 32
+            layoutParams.topMargin = statusBarInsets.top + 30
             view.layoutParams = layoutParams
             insets
         }
@@ -123,7 +121,6 @@ class HomeActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         tvEmptyState.visibility = View.GONE
 
-        // Run heavy lifting off the main UI thread
         lifecycleScope.launch(Dispatchers.IO) {
             val loadedFiles = mutableListOf<PdfFile>()
             val projection = arrayOf(
@@ -155,7 +152,7 @@ class HomeActivity : AppCompatActivity() {
                                     file = File(path),
                                     name = it.getString(nameIndex) ?: "Unknown",
                                     sizeBytes = it.getLong(sizeIndex),
-                                    dateModifiedMs = it.getLong(dateIndex) * 1000L // Convert sec to ms
+                                    dateModifiedMs = it.getLong(dateIndex) * 1000L
                                 )
                             )
                         }
@@ -165,11 +162,10 @@ class HomeActivity : AppCompatActivity() {
                 e.printStackTrace()
             }
 
-            // Return to UI thread to update views
             withContext(Dispatchers.Main) {
                 allPdfs = loadedFiles
                 progressBar.visibility = View.GONE
-                filterPdfs(etSearch.text.toString()) // Applies current sort and search
+                filterPdfs(etSearch.text.toString())
             }
         }
     }
@@ -182,9 +178,9 @@ class HomeActivity : AppCompatActivity() {
         }
 
         filteredList = when (currentSortOrder) {
-            0 -> filteredList.sortedByDescending { it.dateModifiedMs } // Newest first
-            1 -> filteredList.sortedBy { it.name.lowercase() }         // A-Z
-            2 -> filteredList.sortedByDescending { it.sizeBytes }      // Largest first
+            0 -> filteredList.sortedByDescending { it.dateModifiedMs }
+            1 -> filteredList.sortedBy { it.name.lowercase() }
+            2 -> filteredList.sortedByDescending { it.sizeBytes }
             else -> filteredList
         }
 
